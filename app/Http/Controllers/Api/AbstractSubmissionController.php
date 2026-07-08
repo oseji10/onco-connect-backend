@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateAbstractStatusRequest;
 use App\Http\Resources\AbstractResource;
 use App\Models\AbstractSubmission;
 use App\Notifications\AbstractDecisionNotification;
+use App\Notifications\AbstractSubmittedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -58,9 +59,22 @@ class AbstractSubmissionController extends Controller
 
         $abstract->load('authors');
 
+        $this->notifyAuthorOfSubmission($abstract);
+
         return (new AbstractResource($abstract))
             ->response()
             ->setStatusCode(201);
+    }
+
+    private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
+    {
+        $author = $abstract->correspondingAuthor();
+        if (! $author || ! $author->email) {
+            return;
+        }
+
+        Notification::route('mail', $author->email)
+            ->notify(new AbstractSubmittedNotification($abstract));
     }
 
     /**
