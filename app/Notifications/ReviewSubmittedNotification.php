@@ -4,10 +4,11 @@ namespace App\Notifications;
 
 use App\Models\AbstractSubmission;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReviewSubmittedNotification extends Notification
+class ReviewSubmittedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -16,6 +17,9 @@ class ReviewSubmittedNotification extends Notification
         private readonly int $reviewsSubmitted,
         private readonly int $reviewsAssigned
     ) {
+        $this->queue = 'emails';
+        $this->tries = 3;
+        $this->backoff = [30, 120, 300];
     }
 
     public function via(object $notifiable): array

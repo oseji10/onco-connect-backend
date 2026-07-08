@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ReviewerController;
 
 use App\Http\Controllers\Api\ReviewerInvitationController;
+use App\Http\Controllers\Api\SpeakerController;
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
@@ -48,6 +49,11 @@ Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
 Route::get('/abstracts/reviewers/invite/{token}', [ReviewerInvitationController::class, 'show']);
 Route::post('/abstracts/reviewers/invite/{token}/accept', [ReviewerInvitationController::class, 'accept'])
     ->middleware('throttle:10,1');
+
+
+    Route::post('/speakers/register', [SpeakerController::class, 'store'])
+    ->middleware('throttle:10,1');
+ 
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -62,6 +68,12 @@ Route::prefix('auth')->group(function () {
         // Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
         
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
+
+// Admin — TODO: add role middleware once available.
+    Route::get('/speakers', [SpeakerController::class, 'index']);
+    Route::get('/speakers/{speaker}', [SpeakerController::class, 'show']);
+    Route::patch('/speakers/{speaker}/status', [SpeakerController::class, 'updateStatus']);
+
 
 Route::prefix('abstracts')->group(function () {
 

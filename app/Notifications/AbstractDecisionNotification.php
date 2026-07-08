@@ -4,15 +4,19 @@ namespace App\Notifications;
 
 use App\Models\AbstractSubmission;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class AbstractDecisionNotification extends Notification
+class AbstractDecisionNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
     public function __construct(private readonly AbstractSubmission $abstract)
     {
+        $this->queue = 'emails';
+        $this->tries = 3;
+        $this->backoff = [30, 120, 300];
     }
 
     public function via(object $notifiable): array

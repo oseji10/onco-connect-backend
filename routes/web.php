@@ -32,3 +32,9 @@ Route::get('/attendee_photos/{filename}', function ($filename) {
     return response()->file($path);
 });
 
+Route::get('/speakers/photos/{filename}', function ($filename) {
+    $path = storage_path('app/public/speakers/photos/' . $filename);
+    if (!file_exists($path)) abort(404);
+    return response()->file($path);
+});
+

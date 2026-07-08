@@ -4,15 +4,19 @@ namespace App\Notifications;
 
 use App\Models\Reviewer;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReviewerInvitationNotification extends Notification
+class ReviewerInvitationNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
     public function __construct(private readonly Reviewer $reviewer)
     {
+        $this->queue = 'emails';
+        $this->tries = 3;
+        $this->backoff = [30, 120, 300];
     }
 
     public function via(object $notifiable): array
@@ -23,7 +27,7 @@ class ReviewerInvitationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $acceptUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
-            . '/icw2026/accept-invite?token=' . $this->reviewer->invite_token;
+            . '/abstracts/reviewer/accept-invite?token=' . $this->reviewer->invite_token;
 
         return (new MailMessage)
             ->subject('You are invited to review ICW 2026 abstracts')
