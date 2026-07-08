@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbstractSubmission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,8 +35,8 @@ class DashboardController extends Controller
 
         $selectedDateString = $selectedDate->toDateString();
 
-        $programme = $activeEvent->title    ?? 'ISSAM Residential Training';
-        $venue     = $activeEvent->location ?? 'ABU Zaria';
+        $programme = $activeEvent->title    ?? 'ICW 2026';
+        $venue     = $activeEvent->location ?? 'Abuja';
 
         $periodStart = Carbon::parse($activeEvent->startDate ?? $request->query('periodStart', '2026-03-24'))->toDateString();
         $periodEnd   = Carbon::parse($activeEvent->endDate   ?? $request->query('periodEnd',   '2026-03-30'))->toDateString();
@@ -130,6 +131,24 @@ class DashboardController extends Controller
             ->groupBy('gender')
             ->pluck('count', 'gender');
 
+        // Abstract submission metrics.
+        // NOTE: AbstractSubmission has no eventId column (the abstract module
+        // was built standalone, not tied to the events table), so these are
+        // global counts rather than scoped to $eventId like everything else
+        // on this dashboard. If you later run multiple events/years through
+        // this same abstracts table, this will need a scope added.
+        $abstractsSubmitted = AbstractSubmission::count();
+
+        $abstractsAccepted = AbstractSubmission::where('status', 'accepted')->count();
+
+        $posterCount = AbstractSubmission::where('status', 'accepted')
+            ->where('presentation_type', 'Poster')
+            ->count();
+
+        $oralCount = AbstractSubmission::where('status', 'accepted')
+            ->where('presentation_type', 'Oral')
+            ->count();
+
         // ── Overview stats ────────────────────────────────────────────────────
         $overviewStats = [
             ['title' => 'Total Accredited Participants', 'value' => (string) $totalParticipants],
@@ -176,6 +195,30 @@ class DashboardController extends Controller
             ['title' => 'Incidents for Date',      'value' => (string) $incidentsForDate],
             ['title' => 'Open Incidents',           'value' => (string) $openIncidents],
             ['title' => 'Meals (Unique)',           'value' => (string) $mealsServedForDate],
+
+            // Abstract submission metrics
+            [
+                'title' => 'Abstracts Submitted',
+                'value' => (string) $abstractsSubmitted,
+                'note'  => 'All submissions to date',
+            ],
+            [
+                'title' => 'Abstracts Accepted',
+                'value' => (string) $abstractsAccepted,
+                'note'  => $abstractsSubmitted > 0
+                    ? round(($abstractsAccepted / $abstractsSubmitted) * 100) . '% of submissions'
+                    : null,
+            ],
+            [
+                'title' => 'Poster Presentations',
+                'value' => (string) $posterCount,
+                'note'  => 'Accepted, poster format',
+            ],
+            [
+                'title' => 'Oral Presentations',
+                'value' => (string) $oralCount,
+                'note'  => 'Accepted, oral format',
+            ],
         ];
 
         // ── Sub-sections ──────────────────────────────────────────────────────

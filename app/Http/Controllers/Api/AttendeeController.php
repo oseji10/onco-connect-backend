@@ -186,9 +186,13 @@ public function store(Request $request): JsonResponse
         'maritalStatus' => ['nullable', 'string'],
         'organizationName' => ['nullable', 'string'],
         'stateOfResidence' => ['nullable', 'string'],
+        'physicallyChallenged' => ['nullable', 'boolean'],
+        'accessibilityNeeds' => ['nullable', 'string'],
+        'country' => ['nullable', 'string'],
+
         'category' => [
             'required',
-            Rule::in(['healthcare_professional', 'cancer_survivor', 'development_partner', 'student', 'researcher', 'general_public', 'government_official', 'other']),
+            Rule::in(['healthcare_professional', 'cancer_advocate', 'cancer_survivor', 'development_partner', 'student', 'researcher', 'general_public', 'government_official', 'other', 'radiographer', 'nurse', 'doctor', 'pharmacist', 'lab_scientist', 'medical_physicist', 'other_health_worker']),
         ],
         'participationType' => [
             'required',

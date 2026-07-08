@@ -19,19 +19,22 @@ class Attendee extends Model
         'lastName',
         'otherNames',
         'phoneNumber',
+        'phoneCountryCode',
         'email',
         'organization',
         'gender',
         'category',
 
         // NEW FIELDS
-        'maritalStatus',
         'stateOfResidence',
+        'country',
+        'physicallyChallenged',
+        'accessibilityNeeds',
         'organizationName',
         'participationType',
         'title',
         'photoUrl',
-        
+
 
         // REGISTRATION FIELDS
         'isRegistered',
@@ -46,12 +49,14 @@ class Attendee extends Model
 
 
     protected $casts = [
-    'isRegistered' => 'boolean',
-    'registeredAt' => 'datetime',
+        'isRegistered' => 'boolean',
+        'registeredAt' => 'datetime',
 
-    'isAccredited' => 'boolean',
-    'accreditedAt' => 'datetime',
-];
+        'isAccredited' => 'boolean',
+        'accreditedAt' => 'datetime',
+
+        'physicallyChallenged' => 'boolean',
+    ];
 
     /**
      * Relationships

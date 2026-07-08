@@ -34,11 +34,20 @@ use App\Http\Controllers\Api\AccreditationController;
 use App\Http\Controllers\Api\CertificateController;
 use App\Http\Controllers\Api\SponsorshipController;
 
+use App\Http\Controllers\Api\AbstractSubmissionController;
+use App\Http\Controllers\Api\ReviewAssignmentController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\ReviewerController;
 
-
-
+use App\Http\Controllers\Api\ReviewerInvitationController;
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
+Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
+    ->middleware('throttle:10,1');
+
+Route::get('/abstracts/reviewers/invite/{token}', [ReviewerInvitationController::class, 'show']);
+Route::post('/abstracts/reviewers/invite/{token}/accept', [ReviewerInvitationController::class, 'accept'])
+    ->middleware('throttle:10,1');
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -54,6 +63,27 @@ Route::prefix('auth')->group(function () {
         
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
+Route::prefix('abstracts')->group(function () {
+
+    // Abstracts
+    Route::get('/', [AbstractSubmissionController::class, 'index']);
+
+    // Reviewer management (static routes first)
+    Route::post('/reviewers/invite', [ReviewerController::class, 'invite']);
+    Route::get('/reviewers', [ReviewerController::class, 'index']);
+    Route::post('/reviewers/{reviewer}/resend-invite', [ReviewerController::class, 'resendInvite']);
+
+    // Reviewer actions
+    Route::get('/reviews/assigned', [ReviewController::class, 'assigned']);
+
+    // Abstract-specific routes (wildcards last)
+    Route::get('/{abstract}', [AbstractSubmissionController::class, 'show']);
+    Route::patch('/{abstract}/status', [AbstractSubmissionController::class, 'updateStatus']);
+    Route::post('/{abstract}/assign-reviewers', [ReviewAssignmentController::class, 'store']);
+    Route::post('/{abstract}/review', [ReviewController::class, 'store']);
+});
+
+// Reviewers
 
 
 // Public routes (or authenticated routes for participants)
