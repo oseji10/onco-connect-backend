@@ -14,6 +14,7 @@ class AbstractAuthorResource extends JsonResource
             'name' => $this->name,
             'affiliation' => $this->affiliation,
             'email' => $this->email,
+            'phone' => $this->phone,
             'isCorresponding' => (bool) $this->is_corresponding,
         ];
     }

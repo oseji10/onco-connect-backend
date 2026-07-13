@@ -28,6 +28,7 @@ class StoreAbstractRequest extends FormRequest
             'authors.*.name' => ['required', 'string', 'max:255'],
             'authors.*.affiliation' => ['required', 'string', 'max:255'],
             'authors.*.email' => ['nullable', 'email', 'max:255'],
+            'authors.*.phone' => ['nullable', 'string', 'max:255'],
             'authors.*.isCorresponding' => ['boolean'],
         ];
     }

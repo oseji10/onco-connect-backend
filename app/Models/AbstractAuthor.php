@@ -15,6 +15,7 @@ class AbstractAuthor extends Model
         'name',
         'affiliation',
         'email',
+        'phone',
         'is_corresponding',
         'order',
     ];

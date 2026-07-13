@@ -45,6 +45,7 @@ class AbstractSubmissionController extends Controller
                     'name' => $author['name'],
                     'affiliation' => $author['affiliation'],
                     'email' => $author['email'] ?? null,
+                    'phone' => $author['phone'] ?? null,
                     'is_corresponding' => filter_var(
                         $author['isCorresponding'] ?? false,
                         FILTER_VALIDATE_BOOLEAN
