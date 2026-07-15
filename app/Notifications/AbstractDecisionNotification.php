@@ -36,7 +36,7 @@ class AbstractDecisionNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject("Your abstract has been accepted — {$this->abstract->reference}")
             ->greeting('Congratulations!')
-            ->line("Your abstract \"{$this->abstract->title}\" ({$this->abstract->reference}) has been accepted for the 2026 International Cancer Week Conference.")
+            ->line("Your abstract \"{$this->abstract->title}\" ({$this->abstract->reference}) has been accepted for the International Cancer Week 2026 Conference.")
             ->line("Presentation format: {$this->abstract->presentation_type}.")
             ->line('Further details on scheduling and presentation guidelines will follow from the Abstract Committee.');
     }
@@ -46,7 +46,7 @@ class AbstractDecisionNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject("Update on your abstract submission — {$this->abstract->reference}")
             ->greeting('Hello,')
-            ->line("Thank you for submitting \"{$this->abstract->title}\" ({$this->abstract->reference}) to the 2026 International Cancer Week Conference.")
+            ->line("Thank you for submitting \"{$this->abstract->title}\" ({$this->abstract->reference}) to the International Cancer Week 2026 Conference.")
             ->line('After review, the Abstract Committee is unable to accept this abstract for presentation this year.')
             ->line('We encourage you to submit to future editions of International Cancer Week.');
     }

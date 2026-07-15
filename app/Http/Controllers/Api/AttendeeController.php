@@ -58,6 +58,7 @@ public function __construct(
                 'stateOfResidence',
                 'title',
                 'photoUrl',
+                'country',
 
             ])
             ->orderBy('created_at', 'desc')
@@ -79,6 +80,7 @@ public function __construct(
                     'organizationName' => $attendee->organizationName,
                     'stateOfResidence' => $attendee->stateOfResidence,
                     'photoUrl' => $attendee->photoUrl,
+                    'country' => $attendee->country,
                 ];
             });
 
