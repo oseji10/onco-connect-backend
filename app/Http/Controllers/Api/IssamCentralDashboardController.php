@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbstractSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,9 +22,8 @@ class IssamCentralDashboardController extends Controller
     {
         $validated = $request->validate([
             'date' => ['required', 'date'],
-            'type' => ['required', 'string'], // overview | room-metric | incident | supervisor
+            'type' => ['required', 'string'], // overview | incident | supervisor
             'title' => ['nullable', 'string'],
-            'metric' => ['nullable', 'string'],
             'category' => ['nullable', 'string'],
             'supervisorId' => ['nullable', 'integer'],
         ]);
@@ -31,14 +31,12 @@ class IssamCentralDashboardController extends Controller
         $date = Carbon::parse($validated['date'])->toDateString();
         $type = $validated['type'];
         $title = $validated['title'] ?? null;
-        $metric = $validated['metric'] ?? null;
         $category = $validated['category'] ?? null;
         $supervisorId = $validated['supervisorId'] ?? null;
 
         try {
             return match ($type) {
                 'overview' => $this->handleOverviewDetail($date, $title),
-                'room-metric' => $this->handleRoomMetricDetail($date, $metric),
                 'incident' => $this->handleIncidentDetail($date, $category),
                 'supervisor' => $this->handleSupervisorDetail($date, $supervisorId),
                 default => response()->json([
@@ -63,7 +61,14 @@ class IssamCentralDashboardController extends Controller
             'total participants',
             'total accredited participants' => $this->totalParticipantsDetail($date),
 
-            // ── Accredited by gender ────────────────────────────────────
+            // ── Registered participants (broader than accredited) ───────
+            'registered participants' => $this->registeredParticipantsDetail($date),
+
+            // ── Merged gender breakdown cards ───────────────────────────
+            'accredited by gender' => $this->accreditedGenderBreakdownDetail($date),
+            'present by gender'    => $this->presentGenderBreakdownDetail($date),
+
+            // ── Accredited by gender (individual, kept for backwards compat) ──
             'accredited male'   => $this->accreditedByGenderDetail($date, 'male'),
             'accredited female' => $this->accreditedByGenderDetail($date, 'female'),
 
@@ -84,7 +89,7 @@ class IssamCentralDashboardController extends Controller
             'attendance percentage',
             'attendance for date' => $this->attendancePercentageDetail($date),
 
-            // ── Present by gender ────────────────────────────────────────
+            // ── Present by gender (individual, kept for backwards compat) ──
             'males present' => $this->presentByGenderDetail($date, 'male'),
             'females present' => $this->presentByGenderDetail($date, 'female'),
 
@@ -107,11 +112,342 @@ class IssamCentralDashboardController extends Controller
             'unique meals served',
             'meals unique' => $this->uniqueMealsServedDetail($date),
 
+            // ── Abstracts ────────────────────────────────────────────────
+            'abstracts submitted' => $this->abstractsSubmittedDetail($date),
+            'abstracts accepted'  => $this->abstractsAcceptedDetail($date),
+            'abstracts rejected',
+            'rejected abstracts' => $this->rejectedAbstractsDetail($date),
+            'poster presentations' => $this->posterPresentationsDetail($date),
+            'oral presentations'   => $this->oralPresentationsDetail($date),
+
             default => response()->json([
                 'message' => "No detail handler configured for overview title: {$title}",
             ], 422),
         };
     }
+
+    // ── Merged gender-breakdown handlers ───────────────────────────────────────
+
+    protected function accreditedGenderBreakdownDetail(string $date): JsonResponse
+    {
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $rows = DB::table('attendees as a')
+            ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
+            ->select(
+                'a.uniqueId',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
+                'a.gender',
+                'ep.serialNumber',
+                DB::raw('UPPER(a.stateOfResidence) as state'),
+                'a.photoUrl'
+            )
+            ->where('a.isRegistered', 1)
+            ->where('a.eventId', $eventId)
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
+            ->get();
+
+        $maleCount = $rows->filter(
+            fn ($r) => in_array(strtolower(trim((string) $r->gender)), ['male', 'm'])
+        )->count();
+
+        $femaleCount = $rows->filter(
+            fn ($r) => in_array(strtolower(trim((string) $r->gender)), ['female', 'f'])
+        )->count();
+
+        return response()->json([
+            'title'   => 'Accredited Participants — Gender Breakdown',
+            'date'    => $date,
+            'summary' => [
+                'total'       => $rows->count(),
+                'maleCount'   => $maleCount,
+                'femaleCount' => $femaleCount,
+            ],
+            'columns' => [
+                ['key' => 'photoUrl',     'label' => 'Passport'],
+                ['key' => 'uniqueId',     'label' => 'Participant ID'],
+                ['key' => 'fullName',     'label' => 'Full Name'],
+                ['key' => 'gender',       'label' => 'Gender'],
+                ['key' => 'phone',        'label' => 'Phone Number'],
+                ['key' => 'serialNumber', 'label' => 'Serial Number'],
+                ['key' => 'state',        'label' => 'State'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    protected function presentGenderBreakdownDetail(string $date): JsonResponse
+    {
+        $rows = DB::table('daily_attendances as da')
+            ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+            ->join('event_passes as ep', 'ep.passId', '=', 'da.eventPassId')
+            ->leftJoin('users as u', 'u.id', '=', 'da.markedBy')
+            ->select(
+                'da.attendanceId',
+                'a.uniqueId',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
+                'a.gender',
+                'a.photoUrl',
+                'ep.serialNumber',
+                'da.attendanceDate',
+                DB::raw('UPPER(a.stateOfResidence) as state'),
+                DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as markedBy")
+            )
+            ->whereDate('da.attendanceDate', $date)
+            ->where('a.isRegistered', 1)
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
+            ->get();
+
+        $maleCount = $rows->filter(
+            fn ($r) => in_array(strtolower(trim((string) $r->gender)), ['male', 'm'])
+        )->count();
+
+        $femaleCount = $rows->filter(
+            fn ($r) => in_array(strtolower(trim((string) $r->gender)), ['female', 'f'])
+        )->count();
+
+        return response()->json([
+            'title'   => 'Present Today — Gender Breakdown',
+            'date'    => $date,
+            'summary' => [
+                'total'       => $rows->count(),
+                'maleCount'   => $maleCount,
+                'femaleCount' => $femaleCount,
+            ],
+            'columns' => [
+                ['key' => 'uniqueId',       'label' => 'Participant ID'],
+                ['key' => 'fullName',       'label' => 'Full Name'],
+                ['key' => 'gender',         'label' => 'Gender'],
+                ['key' => 'phone',          'label' => 'Phone Number'],
+                ['key' => 'serialNumber',   'label' => 'Serial Number'],
+                ['key' => 'state',          'label' => 'State'],
+                ['key' => 'attendanceDate', 'label' => 'Attendance Date'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    // ── Registered participants (broader than accredited) ──────────────────────
+
+    protected function registeredParticipantsDetail(string $date): JsonResponse
+    {
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // Uses the attendees.isAccredited flag directly, rather than
+        // inferring accreditation from an event_passes join — it's the
+        // more reliable source of truth for this specific status column.
+        $rows = DB::table('attendees as a')
+            ->select(
+                'a.uniqueId',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
+                'a.gender',
+                DB::raw('UPPER(a.stateOfResidence) as state'),
+                'a.photoUrl',
+                DB::raw("CASE WHEN a.isAccredited = 1 THEN 'Accredited' ELSE 'Pending' END as accreditationStatus")
+            )
+            ->where('a.isRegistered', 1)
+            ->where('a.eventId', $eventId)
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
+            ->get();
+
+        return response()->json([
+            'title'   => 'Registered Participants',
+            'date'    => $date,
+            'summary' => [
+                'totalRegistered' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'photoUrl',            'label' => 'Passport'],
+                ['key' => 'uniqueId',            'label' => 'Participant ID'],
+                ['key' => 'fullName',            'label' => 'Full Name'],
+                ['key' => 'gender',              'label' => 'Gender'],
+                ['key' => 'phone',               'label' => 'Phone Number'],
+                ['key' => 'state',               'label' => 'State'],
+                ['key' => 'accreditationStatus', 'label' => 'Accreditation Status'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    // ── Abstracts ────────────────────────────────────────────────────────────────
+
+    protected function abstractsSubmittedDetail(string $date): JsonResponse
+    {
+        // NOTE: adjust these column keys if your AbstractSubmission schema
+        // uses different field names for the author/title.
+        $rows = AbstractSubmission::orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
+                'presentationType'    => $row->presentation_type ?? '-',
+                'status'              => $row->status,
+                'submittedAt'         => optional($row->created_at)->format('d M Y') ?? '-',
+            ]);
+
+        return response()->json([
+            'title'   => 'Abstracts Submitted',
+            'date'    => $date,
+            'summary' => [
+                'submittedCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'title',               'label' => 'Title'],
+                ['key' => 'correspondingAuthor', 'label' => 'Author'],
+                ['key' => 'presentationType',    'label' => 'Presentation Type'],
+                ['key' => 'status',              'label' => 'Status'],
+                ['key' => 'submittedAt',         'label' => 'Submitted'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    protected function abstractsAcceptedDetail(string $date): JsonResponse
+    {
+        $rows = AbstractSubmission::where('status', 'accepted')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
+                'presentationType'    => $row->presentation_type ?? '-',
+                'submittedAt'         => optional($row->created_at)->format('d M Y') ?? '-',
+            ]);
+
+        return response()->json([
+            'title'   => 'Abstracts Accepted',
+            'date'    => $date,
+            'summary' => [
+                'acceptedCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'title',               'label' => 'Title'],
+                ['key' => 'correspondingAuthor', 'label' => 'Author'],
+                ['key' => 'presentationType',    'label' => 'Presentation Type'],
+                ['key' => 'submittedAt',         'label' => 'Submitted'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    protected function rejectedAbstractsDetail(string $date): JsonResponse
+    {
+        $rows = AbstractSubmission::where('status', 'rejected')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
+                'presentationType'    => $row->presentation_type ?? '-',
+                'status'              => $row->status,
+                'submittedAt'         => optional($row->created_at)->format('d M Y') ?? '-',
+            ]);
+
+        return response()->json([
+            'title'   => 'Rejected Abstracts',
+            'date'    => $date,
+            'summary' => [
+                'rejectedCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'id',                 'label' => 'Abstract ID'],
+                ['key' => 'title',              'label' => 'Title'],
+                ['key' => 'correspondingAuthor','label' => 'Author'],
+                ['key' => 'presentationType',   'label' => 'Presentation Type'],
+                ['key' => 'submittedAt',        'label' => 'Submitted'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    protected function posterPresentationsDetail(string $date): JsonResponse
+    {
+        $rows = AbstractSubmission::where('status', 'accepted')
+            ->where('presentation_type', 'Poster')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
+                'submittedAt'         => optional($row->created_at)->format('d M Y') ?? '-',
+            ]);
+
+        return response()->json([
+            'title'   => 'Poster Presentations',
+            'date'    => $date,
+            'summary' => [
+                'posterCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'title',               'label' => 'Title'],
+                ['key' => 'correspondingAuthor', 'label' => 'Author'],
+                ['key' => 'submittedAt',         'label' => 'Submitted'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    protected function oralPresentationsDetail(string $date): JsonResponse
+    {
+        $rows = AbstractSubmission::where('status', 'accepted')
+            ->where('presentation_type', 'Oral')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($row) => [
+                'id'                  => $row->id,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
+                'submittedAt'         => optional($row->created_at)->format('d M Y') ?? '-',
+            ]);
+
+        return response()->json([
+            'title'   => 'Oral Presentations',
+            'date'    => $date,
+            'summary' => [
+                'oralCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'title',               'label' => 'Title'],
+                ['key' => 'correspondingAuthor', 'label' => 'Author'],
+                ['key' => 'submittedAt',         'label' => 'Submitted'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
+    // ── Existing individual-gender handlers (kept for backwards compatibility) ──
 
     protected function accreditedByGenderDetail(string $date, string $gender): JsonResponse
     {
@@ -123,22 +459,23 @@ class IssamCentralDashboardController extends Controller
                 'message' => 'No active event found.',
             ], 404);
         }
-        
+
         $eventId = $activeEvent->eventId ?? $activeEvent->id;
         $rows = DB::table('attendees as a')
             ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
             ->select(
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 'ep.serialNumber',
-                DB::raw('UPPER(a.lga) as lga'),
+                DB::raw('UPPER(a.stateOfResidence) as state'),
                 'a.photoUrl'
             )
             ->where('a.isRegistered', 1)
             ->where('a.eventId', $eventId)
             ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
-            ->orderBy('a.fullName')
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
             ->get();
 
         $label = ucfirst($gender);
@@ -153,7 +490,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'fullName',      'label' => 'Full Name'],
                 ['key' => 'phone',         'label' => 'Phone Number'],
                 ['key' => 'serialNumber',  'label' => 'Serial Number'],
-                ['key' => 'lga',  'label' => 'LGA'],
+                ['key' => 'state',         'label' => 'State'],
             ],
             'rows' => $rows,
         ]);
@@ -166,17 +503,18 @@ class IssamCentralDashboardController extends Controller
             ->join('event_passes as ep', 'ep.passId', '=', 'da.eventPassId')
             ->select(
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 'a.photoUrl',
                 'ep.serialNumber',
                 'da.attendanceDate',
-                DB::raw('UPPER(a.lga) as lga')
+                DB::raw('UPPER(a.stateOfResidence) as state')
             )
             ->whereDate('da.attendanceDate', $date)
             ->where('a.isRegistered', 1)
             ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
-            ->orderBy('a.fullName')
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
             ->get()
             ->map(fn($r) => [
                 'attendeeId'     => $r->uniqueId,
@@ -185,7 +523,7 @@ class IssamCentralDashboardController extends Controller
                 'photoUrl'       => $r->photoUrl,
                 'serialNumber'   => $r->serialNumber,
                 'attendanceDate' => $r->attendanceDate,
-                'lga'            => $r->lga,
+                'state'          => $r->state,
             ]);
 
         $label = ucfirst($gender) . 's';
@@ -199,7 +537,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'fullName',       'label' => 'Full Name'],
                 ['key' => 'phone',          'label' => 'Phone Number'],
                 ['key' => 'serialNumber',   'label' => 'Serial Number'],
-                ['key' => 'lga',            'label' => 'LGA'],
+                ['key' => 'state',          'label' => 'State'],
                 ['key' => 'attendanceDate', 'label' => 'Attendance Date'],
             ],
             'rows' => $rows,
@@ -236,35 +574,6 @@ class IssamCentralDashboardController extends Controller
         return response()->json(['data' => $trend]);
     }
 
-    protected function handleRoomMetricDetail(string $date, ?string $metric): JsonResponse
-    {
-        $normalized = strtolower(trim((string) $metric));
-
-        if (str_contains($normalized, 'assigned')) {
-            return $this->roomAssignedDetail($date);
-        }
-
-        if (str_contains($normalized, 'checked')) {
-            return $this->roomsCheckedDetail($date);
-        }
-
-        if (str_contains($normalized, 'ack')) {
-            return $this->roomAcknowledgementDetail($date);
-        }
-
-        if (str_contains($normalized, 'key')) {
-            return $this->roomKeyIssuedDetail($date);
-        }
-
-        if (str_contains($normalized, 'issue') || str_contains($normalized, 'flag')) {
-            return $this->roomIssuesDetail($date);
-        }
-
-        return response()->json([
-            'message' => "No detail handler configured for room metric: {$metric}",
-        ], 422);
-    }
-
     protected function handleIncidentDetail(string $date, ?string $category): JsonResponse
     {
         // Incidents are not attendee-linked — always event-wide
@@ -278,7 +587,7 @@ class IssamCentralDashboardController extends Controller
                 'ir.status',
                 'ir.description',
                 'ir.occurredAt',
-                DB::raw("COALESCE(a.fullName, '-') as participantName"),
+                DB::raw("COALESCE(CONCAT(a.firstName, ' ', a.lastName), '-') as participantName"),
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as reportedBy")
             )
             ->whereDate('ir.occurredAt', $date)
@@ -335,8 +644,8 @@ class IssamCentralDashboardController extends Controller
                 'da.attendanceId',
                 'da.attendanceDate',
                 'a.attendeeId',
-                'a.fullName',
-                'a.phone',
+                DB::raw("CONCAT(a.firstName, ' ', a.lastName) as fullName"),
+                'a.phoneNumber as phone',
                 DB::raw("CONCAT(u.firstName, ' ', u.lastName) as supervisorName")
             )
             ->whereDate('da.attendanceDate', $date)
@@ -387,16 +696,17 @@ class IssamCentralDashboardController extends Controller
             ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
             ->select(
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 'a.gender',
                 'ep.serialNumber',
                 'a.photoUrl',
-                'a.lga'
+                'a.stateOfResidence as state'
             )
             ->where('a.isRegistered', 1)
             ->where('a.eventId', $activeEvent->eventId)
-            ->orderBy('a.fullName')
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
             ->get();
 
         return response()->json([
@@ -411,7 +721,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'fullName', 'label' => 'Full Name'],
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
-                ['key' => 'lga', 'label' => 'LGA'],
+                ['key' => 'state', 'label' => 'State'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
             ],
             'rows' => $rows,
@@ -428,18 +738,19 @@ class IssamCentralDashboardController extends Controller
             ->select(
                 'da.attendanceId',
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 'a.gender',
                 'a.photoUrl',
                 'ep.serialNumber',
                 'da.attendanceDate',
-                DB::raw('UPPER(a.lga) as lga'),
+                DB::raw('UPPER(a.stateOfResidence) as state'),
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as markedBy")
             )
             ->whereDate('da.attendanceDate', $date)
             ->where('a.isRegistered', 1)
-            ->orderBy('a.fullName')
+            ->orderBy('a.firstName')
+            ->orderBy('a.lastName')
             ->get()
             ->values()
             ->map(fn ($row) => [
@@ -451,9 +762,8 @@ class IssamCentralDashboardController extends Controller
                 'serialNumber' => $row->serialNumber,
                 'photoUrl' => $row->photoUrl,
                 'attendanceDate' => $row->attendanceDate,
-                DB::raw('UPPER(colors.colorName) as color'),
                 'markedBy' => $row->markedBy,
-                'lga' => $row->lga,
+                'state' => $row->state,
             ]);
 
         return response()->json([
@@ -468,7 +778,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
-                ['key' => 'lga', 'label' => 'LGA'],
+                ['key' => 'state', 'label' => 'State'],
                 ['key' => 'attendanceDate', 'label' => 'Attendance Date'],
             ],
             'rows' => $rows,
@@ -524,15 +834,15 @@ class IssamCentralDashboardController extends Controller
             ->select(
                 'a.attendeeId',
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 'a.gender',
                 'a.photoUrl',
                 'ep.serialNumber',
                 'colors.colorName',
                 DB::raw('UPPER(colors.colorName) as color'),
                 DB::raw("CONCAT(users.firstName, ' ', users.lastName) as subclName"),
-                DB::raw('UPPER(a.lga) as lga'),
+                DB::raw('UPPER(a.stateOfResidence) as state'),
             )
             ->where('a.eventId', $eventId)
             ->where('a.isRegistered', 1);
@@ -541,7 +851,7 @@ class IssamCentralDashboardController extends Controller
             $rows->whereNotIn('a.attendeeId', $presentIds);
         }
 
-        $rows = $rows->orderBy('fullName')->get();
+        $rows = $rows->orderBy('a.firstName')->orderBy('a.lastName')->get();
 
         return response()->json([
             'title' => 'Absent Participants',
@@ -561,7 +871,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
-                ['key' => 'lga', 'label' => 'LGA'],
+                ['key' => 'state', 'label' => 'State'],
                 ['key' => 'color', 'label' => 'Color'],
                 ['key' => 'subclName', 'label' => 'Sub CL'],
             ],
@@ -619,8 +929,8 @@ class IssamCentralDashboardController extends Controller
             ->select(
                 'da.attendanceId',
                 'a.attendeeId',
-                'a.fullName',
-                'a.phone',
+                DB::raw("CONCAT(a.firstName, ' ', a.lastName) as fullName"),
+                'a.phoneNumber as phone',
                 'da.attendanceDate',
                 'da.attendanceTime',
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as markedBy")
@@ -661,7 +971,7 @@ class IssamCentralDashboardController extends Controller
                 'ir.severity',
                 'ir.description',
                 'ir.occurredAt',
-                DB::raw("COALESCE(a.fullName, '-') as participantName")
+                DB::raw("COALESCE(CONCAT(a.firstName, ' ', a.lastName), '-') as participantName")
             )
             ->whereDate('ir.occurredAt', $date)
             ->orderByDesc('ir.incidentId')
@@ -698,7 +1008,7 @@ class IssamCentralDashboardController extends Controller
                 'ir.severity',
                 'ir.description',
                 'ir.occurredAt',
-                DB::raw("COALESCE(a.fullName, '-') as participantName")
+                DB::raw("COALESCE(CONCAT(a.firstName, ' ', a.lastName), '-') as participantName")
             )
             ->where('ir.status', 'open')
             ->whereDate('ir.occurredAt', '<=', $date)
@@ -724,200 +1034,6 @@ class IssamCentralDashboardController extends Controller
         ]);
     }
 
-    protected function roomsCheckedDetail(string $date): JsonResponse
-    {
-        // Assumes room_allocations has checkedInAt or roomCheckedAt
-        $rows = DB::table('room_allocations as ra')
-            ->join('attendees as a', 'a.attendeeId', '=', 'ra.attendeeId')
-            ->select(
-                'ra.allocationId',
-                'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
-                'a.photoUrl',
-                'ra.roomNumber',
-                'ra.created_at'
-            )
-            ->whereDate('ra.created_at', $date)
-            ->orderByDesc('ra.allocationId')
-            ->get()
-            ->map(fn ($row) => [
-                'allocationId' => $row->allocationId,
-                'uniqueId' => $row->uniqueId,
-                'fullName' => $row->fullName,
-                'phone' => $row->phone,
-                'roomNumber' => $row->roomNumber,
-                'photoUrl' => $row->photoUrl,
-                'allocatedAt' => $row->created_at,
-            ]);
-
-        return response()->json([
-            'title' => 'Rooms Checked',
-            'date' => $date,
-            'summary' => [
-                'roomsCheckedCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'uniqueId', 'label' => 'Participant ID'],
-                ['key' => 'fullName', 'label' => 'Full Name'],
-                ['key' => 'phone', 'label' => 'Phone Number'],
-                ['key' => 'roomNumber', 'label' => 'Room'],
-                ['key' => 'allocatedAt', 'label' => 'Checked/Allocated At'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
-    protected function roomAssignedDetail(string $date): JsonResponse
-    {
-        $rows = DB::table('room_allocations as ra')
-            ->join('attendees as a', 'a.attendeeId', '=', 'ra.attendeeId')
-            ->select(
-                'ra.allocationId',
-                'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
-                'a.photoUrl',
-                'ra.roomNumber',
-                'ra.created_at'
-            )
-            ->orderBy('a.fullName')
-            ->get()
-            ->map(fn ($row) => [
-                'allocationId' => $row->allocationId,
-                'uniqueId' => $row->uniqueId,
-                'fullName' => $row->fullName,
-                'phone' => $row->phone,
-                'photoUrl' => $row->photoUrl,
-                'roomNumber' => $row->roomNumber,
-                'assignedAt' => $row->created_at,
-            ]);
-
-        return response()->json([
-            'title' => 'Assigned Rooms',
-            'date' => $date,
-            'summary' => [
-                'assignedCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'uniqueId', 'label' => 'Participant ID'],
-                ['key' => 'fullName', 'label' => 'Full Name'],
-                ['key' => 'phone', 'label' => 'Phone Number'],
-                ['key' => 'roomNumber', 'label' => 'Room'],
-                ['key' => 'assignedAt', 'label' => 'Assigned At'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
-    protected function roomAcknowledgementDetail(string $date): JsonResponse
-    {
-        // Assumes room_allocations has acknowledgedAt or acknowledgement flag
-        $rows = DB::table('room_allocations as ra')
-            ->join('attendees as a', 'a.attendeeId', '=', 'ra.attendeeId')
-            ->leftJoin('rooms as r', 'r.roomId', '=', 'ra.roomId')
-            ->select(
-                'ra.roomAllocationId',
-                'a.attendeeId',
-                'a.fullName',
-                DB::raw("COALESCE(r.roomNumber, r.name, '-') as roomName"),
-                'ra.acknowledgedAt'
-            )
-            ->whereNotNull('ra.acknowledgedAt')
-            ->whereDate('ra.acknowledgedAt', $date)
-            ->orderByDesc('ra.roomAllocationId')
-            ->get();
-
-        return response()->json([
-            'title' => 'Room Acknowledgements',
-            'date' => $date,
-            'summary' => [
-                'acknowledgedCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'roomAllocationId', 'label' => 'Allocation ID'],
-                ['key' => 'attendeeId', 'label' => 'Participant ID'],
-                ['key' => 'fullName', 'label' => 'Full Name'],
-                ['key' => 'roomName', 'label' => 'Room'],
-                ['key' => 'acknowledgedAt', 'label' => 'Acknowledged At'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
-    protected function roomKeyIssuedDetail(string $date): JsonResponse
-    {
-        // Assumes room_allocations has keyIssuedAt or keyIssued flag
-        $rows = DB::table('room_allocations as ra')
-            ->join('attendees as a', 'a.attendeeId', '=', 'ra.attendeeId')
-            ->leftJoin('rooms as r', 'r.roomId', '=', 'ra.roomId')
-            ->select(
-                'ra.roomAllocationId',
-                'a.attendeeId',
-                'a.fullName',
-                DB::raw("COALESCE(r.roomNumber, r.name, '-') as roomName"),
-                'ra.keyIssuedAt'
-            )
-            ->whereNotNull('ra.keyIssuedAt')
-            ->whereDate('ra.keyIssuedAt', $date)
-            ->orderByDesc('ra.roomAllocationId')
-            ->get();
-
-        return response()->json([
-            'title' => 'Room Keys Issued',
-            'date' => $date,
-            'summary' => [
-                'keyIssuedCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'roomAllocationId', 'label' => 'Allocation ID'],
-                ['key' => 'attendeeId', 'label' => 'Participant ID'],
-                ['key' => 'fullName', 'label' => 'Full Name'],
-                ['key' => 'roomName', 'label' => 'Room'],
-                ['key' => 'keyIssuedAt', 'label' => 'Key Issued At'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
-    protected function roomIssuesDetail(string $date): JsonResponse
-    {
-        // Assumes room_issues table exists
-        $rows = DB::table('room_issues as ri')
-            ->leftJoin('rooms as r', 'r.roomId', '=', 'ri.roomId')
-            ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ri.attendeeId')
-            ->select(
-                'ri.roomIssueId',
-                DB::raw("COALESCE(r.roomNumber, r.name, '-') as roomName"),
-                DB::raw("COALESCE(a.fullName, '-') as participantName"),
-                'ri.issueType',
-                'ri.status',
-                'ri.description',
-                'ri.created_at'
-            )
-            ->whereDate('ri.created_at', $date)
-            ->orderByDesc('ri.roomIssueId')
-            ->get();
-
-        return response()->json([
-            'title' => 'Room Issues',
-            'date' => $date,
-            'summary' => [
-                'issueCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'roomIssueId', 'label' => 'Issue ID'],
-                ['key' => 'roomName', 'label' => 'Room'],
-                ['key' => 'participantName', 'label' => 'Participant'],
-                ['key' => 'issueType', 'label' => 'Issue Type'],
-                ['key' => 'status', 'label' => 'Status'],
-                ['key' => 'description', 'label' => 'Description'],
-                ['key' => 'created_at', 'label' => 'Created At'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
     protected function mealsServedDetail(string $date): JsonResponse
     {
         // Assumes meal_redemptions table exists
@@ -927,8 +1043,8 @@ class IssamCentralDashboardController extends Controller
             ->select(
                 'mr.redemptionId',
                 'a.attendeeId',
-                'a.fullName',
-                'a.phone',
+                DB::raw("CONCAT(a.firstName, ' ', a.lastName) as fullName"),
+                'a.phoneNumber as phone',
                 DB::raw("COALESCE(m.title, '-') as mealTitle"),
                 'mr.redeemedAt'
             )
@@ -997,13 +1113,13 @@ class IssamCentralDashboardController extends Controller
             ->join('attendees as a', 'a.attendeeId', '=', 'ep.attendeeId')
             ->select(
                 'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
+                DB::raw("UPPER(CONCAT(a.firstName, ' ', a.lastName)) as fullName"),
+                'a.phoneNumber as phone',
                 DB::raw('COUNT(mr.redemptionId) as mealCount')
             )
             ->whereDate('mr.redeemedAt', $date)
             ->where('a.isRegistered', 1)
-            ->groupBy('a.attendeeId', 'a.fullName', 'a.phone')
+            ->groupBy('a.attendeeId', 'a.firstName', 'a.lastName', 'a.phoneNumber')
             ->orderByDesc('mealCount')
             ->get();
 

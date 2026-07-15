@@ -52,13 +52,22 @@ class DashboardController extends Controller
             })
             ->where('a.isRegistered', 1)
             ->count();
-    
+
+        // Broader than "accredited" — every completed registration for this
+        // event, whether or not the attendee has been issued a badge/pass
+        // yet. If your registration flow doesn't gate on `eventId` directly
+        // on the attendees table, adjust this scope accordingly.
+        $totalRegistered = DB::table('attendees')
+            ->where('eventId', $eventId)
+            // ->where('isRegistered', 1)
+            ->count();
+
         $presentForDate = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('da.attendanceDate', $selectedDateString)
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->distinct()
             ->count('da.attendeeId');
 
@@ -78,18 +87,12 @@ class DashboardController extends Controller
             ->whereIn('status', ['open', 'pending'])
             ->count();
 
-        $roomsCheckedForDate = DB::table('room_allocations')
-            ->where('eventId', $eventId)
-            ->whereDate('allocatedAt', $selectedDateString)
-            ->whereNotNull('allocatedAt')
-            ->count();
-
         $mealsServedForDate = DB::table('meal_redemptions as mr')
             ->join('event_passes as ep', 'ep.passId', '=', 'mr.passId')
             ->join('attendees as a', 'a.attendeeId', '=', 'ep.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('mr.created_at', $selectedDateString)
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->distinct('ep.attendeeId')
             ->count('ep.attendeeId');
 
@@ -99,7 +102,7 @@ class DashboardController extends Controller
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('da.attendanceDate', $selectedDateString)
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->select(
                 DB::raw("
                     CASE
@@ -117,7 +120,7 @@ class DashboardController extends Controller
         $registeredGenderSplit = DB::table('attendees as a')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->select(
                 DB::raw("
                     CASE
@@ -141,6 +144,8 @@ class DashboardController extends Controller
 
         $abstractsAccepted = AbstractSubmission::where('status', 'accepted')->count();
 
+        $abstractsRejected = AbstractSubmission::where('status', 'rejected')->count();
+
         $posterCount = AbstractSubmission::where('status', 'accepted')
             ->where('presentation_type', 'Poster')
             ->count();
@@ -152,6 +157,12 @@ class DashboardController extends Controller
         // ── Overview stats ────────────────────────────────────────────────────
         $overviewStats = [
             ['title' => 'Total Accredited Participants', 'value' => (string) $totalParticipants],
+
+            [
+                'title' => 'Registered Participants',
+                'value' => (string) $totalRegistered,
+                'note'  => 'All registrations, incl. not-yet-accredited',
+            ],
 
             [
                 'title'            => 'Accredited Male',
@@ -191,7 +202,6 @@ class DashboardController extends Controller
                 'iconClassName'    => 'w-5 h-5 text-pink-700 dark:text-pink-100',
             ],
 
-            // ['title' => 'Rooms Checked for Date', 'value' => (string) $roomsCheckedForDate],
             ['title' => 'Incidents for Date',      'value' => (string) $incidentsForDate],
             ['title' => 'Open Incidents',           'value' => (string) $openIncidents],
             ['title' => 'Meals (Unique)',           'value' => (string) $mealsServedForDate],
@@ -210,6 +220,13 @@ class DashboardController extends Controller
                     : null,
             ],
             [
+                'title' => 'Abstracts Rejected',
+                'value' => (string) $abstractsRejected,
+                'note'  => $abstractsSubmitted > 0
+                    ? round(($abstractsRejected / $abstractsSubmitted) * 100) . '% of submissions'
+                    : null,
+            ],
+            [
                 'title' => 'Poster Presentations',
                 'value' => (string) $posterCount,
                 'note'  => 'Accepted, poster format',
@@ -224,7 +241,6 @@ class DashboardController extends Controller
         // ── Sub-sections ──────────────────────────────────────────────────────
         $supervisorRows   = []; // Removed supervisor/Sub-CL tracking
         $incidentSnapshot = $this->buildIncidentSnapshot($selectedDateString, $eventId);
-        $roomMetrics      = $this->buildRoomMetrics($selectedDateString, $eventId);
         $coordinatorNotes = $this->buildCoordinatorNotes($openIncidents, $selectedDateString);
 
         return response()->json([
@@ -237,7 +253,6 @@ class DashboardController extends Controller
                 'overviewStats'    => $overviewStats,
                 'supervisorRows'   => $supervisorRows,
                 'incidentSnapshot' => $incidentSnapshot,
-                'roomMetrics'      => $roomMetrics,
                 'coordinatorNotes' => $coordinatorNotes,
             ],
         ]);
@@ -259,26 +274,6 @@ class DashboardController extends Controller
                 'count'    => (int) $row->total,
             ])
             ->toArray();
-    }
-
-    protected function buildRoomMetrics(
-        string $selectedDate,
-        int    $eventId
-    ): array {
-        $assigned = DB::table('room_allocations')
-            ->where('eventId', $eventId)
-            ->count();
-
-        $checkedInForDate = DB::table('room_allocations')
-            ->where('eventId', $eventId)
-            ->whereNotNull('allocatedAt')
-            ->whereDate('allocatedAt', $selectedDate)
-            ->count();
-
-        return [
-            ['metric' => 'Assigned (All)',      'value' => $assigned],
-            ['metric' => 'Checked In for Date', 'value' => $checkedInForDate],
-        ];
     }
 
     protected function buildCoordinatorNotes(int $openIncidents, string $selectedDate): array
