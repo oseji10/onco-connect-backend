@@ -50,7 +50,7 @@ class DashboardController extends Controller
                     ->whereColumn('ep.attendeeId', 'a.attendeeId')
                     ->where('ep.eventId', $eventId);
             })
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->count();
 
         // Broader than "accredited" — every completed registration for this
