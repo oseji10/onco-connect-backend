@@ -41,6 +41,7 @@ use App\Http\Controllers\Api\ReviewerController;
 
 use App\Http\Controllers\Api\ReviewerInvitationController;
 use App\Http\Controllers\Api\SpeakerController;
+use App\Http\Controllers\Api\UserController;
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
@@ -66,7 +67,15 @@ Route::prefix('auth')->group(function () {
         });
     });
         // Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
-        
+    
+        Route::middleware(['auth:api', 'role:super_admin'])->prefix('users')->group(function () {
+    Route::get('/', [UserController::class, 'index']);
+    Route::get('/roles', [UserController::class, 'roles']);
+    Route::post('/', [UserController::class, 'store']);
+    Route::put('/{user}', [UserController::class, 'update']);
+    Route::delete('/{user}', [UserController::class, 'destroy']);
+});
+
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
 // Admin — TODO: add role middleware once available.

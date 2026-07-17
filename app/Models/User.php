@@ -39,15 +39,6 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Role::class, 'role', 'roleId');
     }
 
-    public function screeningVisits(): HasMany
-    {
-        return $this->hasMany(ScreeningVisit::class, 'createdBy');
-    }
-
-    public function riskProfilesRecorded(): HasMany
-    {
-        return $this->hasMany(ClientRiskProfile::class, 'recorded_by');
-    }
 
     public function getJWTIdentifier()
     {
@@ -55,12 +46,12 @@ class User extends Authenticatable implements JWTSubject
     }
 
     public function getJWTCustomClaims(): array
-    {
-        return [
-            'facilityId' => $this->facilityId,
-            'role' => $this->roleName,
-        ];
-    }
+{
+    return [
+        'facilityId' => $this->facilityId,
+        'role' => $this->user_role?->roleName,
+    ];
+}
 
     public function isSuperAdmin(): bool
     {
