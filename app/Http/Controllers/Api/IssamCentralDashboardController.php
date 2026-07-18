@@ -302,7 +302,7 @@ class IssamCentralDashboardController extends Controller
         $rows = AbstractSubmission::orderByDesc('created_at')
             ->get()
             ->map(fn ($row) => [
-                'id'                  => $row->reference,
+                'reference'                  => $row->reference,
                 'title'               => $row->title ?? '-',
                 'correspondingAuthor' => $row->corresponding_author ?? $row->author_name ?? '-',
                 'presentationType'    => $row->presentation_type ?? '-',
