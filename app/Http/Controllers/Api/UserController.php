@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Mail\UserCredentialsMail;
+use App\Mail\UserOtpMail;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -101,7 +101,7 @@ class UserController extends Controller
         }
 
         return DB::transaction(function () use ($validated, $role) {
-            $plainPassword = Str::random(10);
+            $otp = (string) random_int(100000, 999999);
 
             $user = User::create([
                 'facilityId' => null,
@@ -110,16 +110,21 @@ class UserController extends Controller
                 'email' => $validated['email'],
                 'phoneNumber' => $validated['phoneNumber'],
                 'alternatePhoneNumber' => $validated['alternatePhoneNumber'] ?? null,
-                'password' => Hash::make($plainPassword),
+                // Placeholder — nobody logs in with this. Real access starts
+                // with the OTP below, then changePassword() sets a real one.
+                'password' => Hash::make(Str::random(40)),
                 'role' => $role->roleId,
                 'status' => $validated['status'] ?? 'active',
+                'must_change_password' => true,
+                'otp' => Hash::make($otp),
+                'otp_expires_at' => now()->addHours(24),
             ]);
 
-            Mail::to($user->email)->send(new UserCredentialsMail($user, $plainPassword));
+            Mail::to($user->email)->send(new UserOtpMail($user, $otp));
 
             return response()->json([
                 'success' => true,
-                'message' => 'User created successfully. Login credentials sent to their email.',
+                'message' => 'User created successfully. A one-time login code was sent to their email.',
                 'data' => $this->transform($user->load('user_role')),
             ], 201);
         });

@@ -317,7 +317,7 @@ class IssamCentralDashboardController extends Controller
                 'submittedCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'reference',                  'label' => 'Abstract ID'],
                 ['key' => 'title',               'label' => 'Title'],
                 ['key' => 'correspondingAuthor', 'label' => 'Author'],
                 ['key' => 'presentationType',    'label' => 'Presentation Type'],
@@ -348,7 +348,7 @@ class IssamCentralDashboardController extends Controller
                 'acceptedCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'reference',                  'label' => 'Abstract ID'],
                 ['key' => 'title',               'label' => 'Title'],
                 ['key' => 'correspondingAuthor', 'label' => 'Author'],
                 ['key' => 'presentationType',    'label' => 'Presentation Type'],
@@ -379,11 +379,11 @@ class IssamCentralDashboardController extends Controller
                 'rejectedCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'id',                 'label' => 'Abstract ID'],
-                ['key' => 'title',              'label' => 'Title'],
-                ['key' => 'correspondingAuthor','label' => 'Author'],
-                ['key' => 'presentationType',   'label' => 'Presentation Type'],
-                ['key' => 'submittedAt',        'label' => 'Submitted'],
+                ['key' => 'reference',                  'label' => 'Abstract ID'],
+                ['key' => 'title',               'label' => 'Title'],
+                ['key' => 'correspondingAuthor', 'label' => 'Author'],
+                ['key' => 'presentationType',    'label' => 'Presentation Type'],
+                ['key' => 'submittedAt',         'label' => 'Submitted'],
             ],
             'rows' => $rows,
         ]);
@@ -409,7 +409,7 @@ class IssamCentralDashboardController extends Controller
                 'posterCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'reference',                  'label' => 'Abstract ID'],
                 ['key' => 'title',               'label' => 'Title'],
                 ['key' => 'correspondingAuthor', 'label' => 'Author'],
                 ['key' => 'submittedAt',         'label' => 'Submitted'],
@@ -438,7 +438,7 @@ class IssamCentralDashboardController extends Controller
                 'oralCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'id',                  'label' => 'Abstract ID'],
+                ['key' => 'reference',                  'label' => 'Abstract ID'],
                 ['key' => 'title',               'label' => 'Title'],
                 ['key' => 'correspondingAuthor', 'label' => 'Author'],
                 ['key' => 'submittedAt',         'label' => 'Submitted'],

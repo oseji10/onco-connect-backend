@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\ReviewerController;
 use App\Http\Controllers\Api\ReviewerInvitationController;
 use App\Http\Controllers\Api\SpeakerController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PasswordSetupController;
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
@@ -56,6 +57,16 @@ Route::post('/abstracts/reviewers/invite/{token}/accept', [ReviewerInvitationCon
     ->middleware('throttle:10,1');
  
 
+
+    Route::post('/auth/login-otp', [PasswordSetupController::class, 'loginWithOtp'])
+    ->name('auth.login-otp');
+ 
+Route::middleware(['auth:api'])->group(function () {
+    Route::post('/auth/change-password', [PasswordSetupController::class, 'changePassword'])
+        ->name('auth.change-password');
+});
+
+
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 
@@ -68,7 +79,15 @@ Route::prefix('auth')->group(function () {
     });
         // Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
     
-        Route::middleware(['auth:api', 'role:super_admin'])->prefix('users')->group(function () {
+//         Route::middleware(['auth:api', 'role:super_admin'])->prefix('users')->group(function () {
+//     Route::get('/', [UserController::class, 'index']);
+//     Route::get('/roles', [UserController::class, 'roles']);
+//     Route::post('/', [UserController::class, 'store']);
+//     Route::put('/{user}', [UserController::class, 'update']);
+//     Route::delete('/{user}', [UserController::class, 'destroy']);
+// });
+
+Route::middleware(['auth:api', 'password.changed', 'role:super_admin'])->prefix('users')->group(function () {
     Route::get('/', [UserController::class, 'index']);
     Route::get('/roles', [UserController::class, 'roles']);
     Route::post('/', [UserController::class, 'store']);
@@ -76,7 +95,7 @@ Route::prefix('auth')->group(function () {
     Route::delete('/{user}', [UserController::class, 'destroy']);
 });
 
-Route::middleware(['auth:api', 'facility.scope'])->group(function () {
+Route::middleware(['auth:api', 'facility.scope', 'password.changed',])->group(function () {
 
 // Admin — TODO: add role middleware once available.
     Route::get('/speakers', [SpeakerController::class, 'index']);

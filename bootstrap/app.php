@@ -21,5 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })->withMiddleware(function (Illuminate\Foundation\Configuration\Middleware $middleware) {
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
+            'password.changed' => \App\Http\Middleware\EnsurePasswordChanged::class,
         ]);
     })->create();
+    
