@@ -26,7 +26,8 @@ class UserOtpMail extends Mailable implements ShouldQueue
 
         // FRONTEND_URL should point at your Next.js app's base, e.g.
         // https://icw.example.com — add it to .env if it isn't there yet.
-        $base = rtrim(config('app.frontend_url', env('FRONTEND_URL', '')), '/');
+        // $base = rtrim(config('app.frontend_url', env('FRONTEND_URL', '')), '/');
+        $base = rtrim('https://icw-app.nicrat.gov.ng');
         $this->loginUrl = $base . '/icw/login-otp?email=' . urlencode($user->email);
     }
 
