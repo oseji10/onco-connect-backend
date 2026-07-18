@@ -12,6 +12,18 @@
         {{ $otp }}
     </p>
 
+    <p style="text-align: center; margin: 24px 0;">
+        <a href="{{ $loginUrl }}"
+           style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: bold; padding: 12px 28px; border-radius: 10px;">
+            Log In Now
+        </a>
+    </p>
+
+    <p style="font-size: 13px; color: #6b7280;">
+        Or copy this link into your browser:<br>
+        <a href="{{ $loginUrl }}" style="color: #16a34a; word-break: break-all;">{{ $loginUrl }}</a>
+    </p>
+
     <p>This code expires in 24 hours and can only be used once. If you didn't expect this email,
     you can ignore it.</p>
 

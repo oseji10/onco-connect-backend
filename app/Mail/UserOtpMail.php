@@ -1,75 +1,42 @@
 <?php
 
-namespace App\Models;
+namespace App\Mail;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
 
-class User extends Authenticatable implements JWTSubject
+class UserOtpMail extends Mailable implements ShouldQueue
 {
-    use Notifiable;
+    use Queueable, SerializesModels;
 
-    protected $fillable = [
-        'facilityId',
-        'firstName',
-        'lastName',
-        'email',
-        'phoneNumber',
-        'alternatePhoneNumber',
-        'password',
-        'role',
-        'status',
-        'must_change_password',
-        'otp',
-        'otp_expires_at',
-    ];
+    public string $loginUrl;
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-        'otp',
-    ];
+    public function __construct(
+        public User $user,
+        public string $otp,
+    ) {
+        $this->queue = 'emails';
+        $this->tries = 3;
+        $this->backoff = [30, 120, 300];
 
-    protected $casts = [
-        'must_change_password' => 'boolean',
-        'otp_expires_at' => 'datetime',
-    ];
-
-    public function facility(): BelongsTo
-    {
-        return $this->belongsTo(Facility::class, 'facilityId');
+        // FRONTEND_URL should point at your Next.js app's base, e.g.
+        // https://icw.example.com — add it to .env if it isn't there yet.
+        $base = rtrim(config('app.frontend_url', env('FRONTEND_URL', '')), '/');
+        $this->loginUrl = $base . '/icw/login-otp?email=' . urlencode($user->email);
     }
 
-     public function user_role(): BelongsTo
+    public function envelope(): Envelope
     {
-        return $this->belongsTo(Role::class, 'role', 'roleId');
+        return new Envelope(subject: 'Your ICW 2026 Dashboard Login Code');
     }
 
-
-    public function getJWTIdentifier()
+    public function content(): Content
     {
-        return $this->getKey();
-    }
-
-    public function getJWTCustomClaims(): array
-    {
-        return [
-            'facilityId' => $this->facilityId,
-            'role' => $this->user_role?->roleName,
-            'mustChangePassword' => $this->must_change_password,
-        ];
-    }
-
-    public function isSuperAdmin(): bool
-    {
-        return $this->user_role?->roleName === 'super_admin';
-    }
-
-    public function partner(): bool
-    {
-        return $this->user_role?->roleName === 'partner';
+        return new Content(view: 'emails.user-otp');
     }
 }

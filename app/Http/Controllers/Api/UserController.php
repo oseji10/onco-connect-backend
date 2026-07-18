@@ -32,6 +32,7 @@ class UserController extends Controller
         'admin',
         'reviewer',
         'registration_desk_officer',
+        'abstract_committee_member',
     ];
 
     protected array $roleLabels = [
@@ -39,6 +40,7 @@ class UserController extends Controller
         'admin' => 'Admin',
         'reviewer' => 'Reviewer',
         'registration_desk_officer' => 'Registration Desk Officer',
+        'abstract_committee_member' => 'Abstract Committee Member',
     ];
 
     public function index(): JsonResponse

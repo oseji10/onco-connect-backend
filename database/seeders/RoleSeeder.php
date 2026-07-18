@@ -31,6 +31,7 @@ class RoleSeeder extends Seeder
             'reviewer',
             'registration_desk_officer',
             'participant',
+            'abstract_committee_member',
         ];
 
         foreach ($roles as $roleName) {
