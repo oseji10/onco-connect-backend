@@ -10,7 +10,7 @@
                 Proudly developed by
 
                 <!-- {{-- Option A: Text only --}} -->
-                <strong style="color: #6c63ff;">Resilience Nigeria</strong>
+                <strong style="color: #6c63ff;">Resilience Nigeria. The Official Technology Partner Of The International Cancer Week 2026</strong>
 
                 <!-- {{-- Option B: With logo image — uncomment and swap src --}}
                 {{-- 
