@@ -72,6 +72,7 @@ $lastName = implode(' ', $parts);
         // $user->assignRole('reviewer');
 
         $reviewer->update([
+            'user_id'=> $user->id,
             'status' => 'active',
             'activated_at' => now(),
             'invite_token' => null, // one-time use
