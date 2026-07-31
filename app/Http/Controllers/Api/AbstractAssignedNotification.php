@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 
 class AbstractAssignedNotification extends Notification implements ShouldQueue
 {
@@ -25,6 +26,9 @@ class AbstractAssignedNotification extends Notification implements ShouldQueue
     {
         $reviewUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
             . '/';
+            Log::info('Review URL generated', [
+    'reviewUrl' => $reviewUrl,
+]);
 
         return (new MailMessage)
             ->subject('New ICW 2026 abstract assigned for review')

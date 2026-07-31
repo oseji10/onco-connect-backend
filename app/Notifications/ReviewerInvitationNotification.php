@@ -7,7 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-
+use Illuminate\Support\Facades\Log;
 class ReviewerInvitationNotification extends Notification implements ShouldQueue
 {
     use Queueable;
@@ -28,6 +28,10 @@ class ReviewerInvitationNotification extends Notification implements ShouldQueue
     {
         $acceptUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
             . '/abstracts/reviewer/accept-invite?token=' . $this->reviewer->invite_token;
+
+                        Log::info('Accept URL generated', [
+    'acceptUrl' => $acceptUrl,
+]);
 
         return (new MailMessage)
             ->subject('You are invited to review ICW 2026 abstracts')
