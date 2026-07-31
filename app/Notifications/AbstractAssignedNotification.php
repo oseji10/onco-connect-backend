@@ -28,7 +28,7 @@ class AbstractAssignedNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $reviewUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
-            . '/abstracts/reviewer';
+            . '/icw2026/abstract-review';
             Log::info('Review URL generated', [
     'reviewUrl' => $reviewUrl,
 ]);

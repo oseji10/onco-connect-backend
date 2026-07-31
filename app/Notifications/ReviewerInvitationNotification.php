@@ -27,11 +27,9 @@ class ReviewerInvitationNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $acceptUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
-            . '/abstracts/reviewer/accept-invite?token=' . $this->reviewer->invite_token;
+            . '/icw2026/accept-invite?token=' . $this->reviewer->invite_token;
 
-                        Log::info('Accept URL generated', [
-    'acceptUrl' => $acceptUrl,
-]);
+
 
         return (new MailMessage)
             ->subject('You are invited to review ICW 2026 abstracts')
