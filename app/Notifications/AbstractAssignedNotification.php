@@ -29,9 +29,6 @@ class AbstractAssignedNotification extends Notification implements ShouldQueue
     {
         $reviewUrl = rtrim(config('app.frontend_url', config('app.url')), '/')
             . '/icw2026/abstract-review';
-            Log::info('Review URL generated', [
-    'reviewUrl' => $reviewUrl,
-]);
 
         return (new MailMessage)
             ->subject('New ICW 2026 abstract assigned for review')
