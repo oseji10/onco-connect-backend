@@ -45,16 +45,24 @@ class ReviewerInvitationController extends Controller
 
         $user = User::where('email', $reviewer->email)->first();
 
+        $parts = preg_split('/\s+/', trim($reviewer->name));
+
+$firstName = array_shift($parts);
+$lastName = implode(' ', $parts);
+
         if ($user) {
             // Email already has an account on this platform (e.g. they also
             // attend as a delegate) — just link it, don't touch their password.
             $reviewer->update(['user_id' => $user->id]);
         } else {
             $user = User::create([
+                'firstName' => $firstName,
+                'lastName' => $lastName,
                 'name' => $reviewer->name,
                 'email' => $reviewer->email,
                 'password' => Hash::make($request->input('password')),
                 'email_verified_at' => now(),
+                'role' => 4,
             ]);
             $reviewer->update(['user_id' => $user->id]);
         }
