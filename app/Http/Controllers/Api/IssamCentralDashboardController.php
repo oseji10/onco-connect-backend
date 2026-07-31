@@ -268,7 +268,7 @@ class IssamCentralDashboardController extends Controller
                 'a.photoUrl',
                 DB::raw("CASE WHEN a.isAccredited = 1 THEN 'Accredited' ELSE 'Pending' END as accreditationStatus")
             )
-            ->where('a.isRegistered', 1)
+            // ->where('a.isRegistered', 1)
             ->where('a.eventId', $eventId)
             ->orderBy('a.firstName')
             ->orderBy('a.lastName')

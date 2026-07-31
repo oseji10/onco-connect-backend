@@ -46,7 +46,7 @@ class DashboardController extends Controller
        $totalParticipants = DB::table('attendees')
     ->where('eventId', $eventId)
     // ->where('isRegistered', 1)
-    ->where('isAccredited', 1)
+    ->where('isRegistered', "1")
     ->count();
 
         // Broader than "accredited" — every completed registration for this
@@ -149,6 +149,8 @@ class DashboardController extends Controller
         $oralCount = AbstractSubmission::where('status', 'accepted')
             ->where('presentation_type', 'Oral')
             ->count();
+
+            
 
         // ── Overview stats ────────────────────────────────────────────────────
         $overviewStats = [

@@ -106,7 +106,7 @@ class AbstractSubmissionController extends Controller
             });
         }
 
-        $perPage = (int) $request->query('perPage', 20);
+        $perPage = (int) $request->query('perPage', 10);
         $page = $query->paginate($perPage);
 
         return response()->json([
