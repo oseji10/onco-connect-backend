@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 use App\Notifications\ReviewSubmittedNotification;
+use App\Models\ConferenceSetting;
+
 
 class ReviewController extends Controller
 {
@@ -52,6 +54,11 @@ class ReviewController extends Controller
         StoreReviewRequest $request,
         AbstractSubmission $abstract
     ): JsonResponse {
+            if (ConferenceSetting::current()->reviewsClosed()) {
+        throw ValidationException::withMessages([
+            'abstract' => 'The abstract review deadline has passed. Reviews are closed.',
+        ]);
+    }
         $reviewer = $this->resolveReviewer($request);
 
         $assignment = $abstract->assignments()

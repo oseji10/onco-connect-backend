@@ -43,6 +43,8 @@ use App\Http\Controllers\Api\ReviewerInvitationController;
 use App\Http\Controllers\Api\SpeakerController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PasswordSetupController;
+use App\Http\Controllers\Api\ConferenceSettingController;
+
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
@@ -51,7 +53,7 @@ Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
 Route::get('/abstracts/reviewers/invite/{token}', [ReviewerInvitationController::class, 'show']);
 Route::post('/abstracts/reviewers/invite/{token}/accept', [ReviewerInvitationController::class, 'accept'])
     ->middleware('throttle:10,1');
-
+Route::get('/conference-settings', [ConferenceSettingController::class, 'show']);
 
     Route::post('/speakers/register', [SpeakerController::class, 'store'])
     ->middleware('throttle:10,1');
@@ -96,6 +98,8 @@ Route::middleware(['auth:api', 'password.changed', 'role:super_admin'])->prefix(
 });
 
 Route::middleware(['auth:api', 'facility.scope', 'password.changed',])->group(function () {
+
+Route::patch('/conference-settings', [ConferenceSettingController::class, 'update']);
 
 // Admin — TODO: add role middleware once available.
     Route::get('/speakers', [SpeakerController::class, 'index']);

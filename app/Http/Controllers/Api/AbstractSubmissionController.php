@@ -9,6 +9,8 @@ use App\Http\Resources\AbstractResource;
 use App\Models\AbstractSubmission;
 use App\Notifications\AbstractDecisionNotification;
 use App\Notifications\AbstractSubmittedNotification;
+use App\Models\ConferenceSetting;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,12 @@ class AbstractSubmissionController extends Controller
      */
     public function store(StoreAbstractRequest $request): JsonResponse
     {
+        if (ConferenceSetting::current()->submissionsClosed()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'The abstract submission deadline has passed. Submissions are closed.',
+        ], 422);
+    }
         $abstract = DB::transaction(function () use ($request) {
             $abstract = AbstractSubmission::create([
                 'reference' => 'PENDING', // placeholder, replaced below once we have an id
