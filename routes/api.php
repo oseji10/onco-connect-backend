@@ -106,24 +106,31 @@ Route::patch('/conference-settings', [ConferenceSettingController::class, 'updat
 
     // Route::get('admin/rankings', [AbstractRankingController::class, 'index']);
     
-    Route::post('admin/rankings/classify-and-notify', [AbstractRankingController::class, 'classifyAndNotify']);
+//     Route::post('admin/rankings/classify-and-notify', [AbstractRankingController::class, 'classifyAndNotify']);
     
-    Route::post('admin/rankings/{abstractId}/resend-notification', [AbstractRankingController::class, 'resendNotification']);
+//     Route::post('admin/rankings/{abstractId}/resend-notification', [AbstractRankingController::class, 'resendNotification']);
 
-   // routes/api.php
+//    // routes/api.php
 
 
-        // Admin gets all rankings
-        Route::get('/admin/rankings', [AbstractRankingController::class, 'index']);
+//         // Admin gets all rankings
+//         Route::get('/admin/rankings', [AbstractRankingController::class, 'index']);
         
-        // Admin classification and notifications
-        Route::post('/admin/rankings/classify', [AbstractRankingController::class, 'classifyAndNotify']);
-        Route::post('/admin/rankings/resend/{abstractId}', [AbstractRankingController::class, 'resendNotification']);
+//         // Admin classification and notifications
+//         Route::post('/admin/rankings/classify', [AbstractRankingController::class, 'classifyAndNotify']);
+//         Route::post('/admin/rankings/resend/{abstractId}', [AbstractRankingController::class, 'resendNotification']);
         
-        // Admin export
-        Route::get('/admin/rankings/export', [AbstractRankingController::class, 'export']);
+//         // Admin export
+//         Route::get('/admin/rankings/export', [AbstractRankingController::class, 'export']);
     
     
+Route::get('/abstracts/rankings', [AbstractRankingController::class, 'preview']);
+Route::post('/abstracts/rankings/process', [AbstractRankingController::class, 'process']);
+Route::get('/abstracts/rankings/notifications', [AbstractRankingController::class, 'notificationStatus']);
+ 
+Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
+Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
+
     // Reviewer routes - available to all authenticated users
     Route::get('/reviewer/rankings', [AbstractRankingController::class, 'reviewerRankings']);
     Route::get('/reviewer/rankings/export', [AbstractRankingController::class, 'export']);

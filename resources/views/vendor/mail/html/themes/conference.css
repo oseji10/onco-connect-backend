@@ -1,0 +1,323 @@
+/* This is Laravel's standard markdown-mail theme, kept structurally
+   intact (so nothing breaks in mail clients) and re-colored to match
+   the app's teal/indigo palette. Save as:
+   resources/views/vendor/mail/html/themes/conference.css
+   Referenced via ->theme('conference') in AbstractDecisionNotification. */
+
+/* Base */
+
+body,
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    position: relative;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #f4f7f6;
+    color: #4b5563;
+    height: 100%;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+p,
+ul,
+ol,
+blockquote {
+    line-height: 1.5em;
+    text-align: left;
+}
+
+a {
+    color: #0d9488;
+}
+
+a img {
+    border: none;
+}
+
+/* Typography */
+
+h1 {
+    color: #111827;
+    font-size: 20px;
+    font-weight: 700;
+    margin-top: 0;
+    text-align: left;
+}
+
+h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 0;
+    text-align: left;
+}
+
+h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    font-size: 15px;
+    line-height: 1.6em;
+    margin-top: 0;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+img {
+    max-width: 100%;
+}
+
+/* Layout */
+
+.wrapper {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f4f7f6;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.content {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+/* Header */
+
+.header {
+    padding: 32px 0;
+    text-align: center;
+}
+
+.header a {
+    color: #0f766e;
+    font-size: 20px;
+    font-weight: 700;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.header .logo {
+    height: 36px;
+    max-height: 36px;
+    width: auto;
+}
+
+/* Body */
+
+.body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f4f7f6;
+    border-bottom: 1px solid #e5e7eb;
+    border-top: 1px solid #e5e7eb;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.inner-body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 570px;
+    background-color: #ffffff;
+    border-color: #e5e7eb;
+    border-radius: 12px;
+    border-width: 1px;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+    margin: 0 auto;
+    padding: 0;
+    width: 570px;
+}
+
+/* Subcopy */
+
+.subcopy {
+    border-top: 1px solid #e5e7eb;
+    margin-top: 25px;
+    padding-top: 25px;
+}
+
+.subcopy p {
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+/* Footer */
+
+.footer {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 0 auto;
+    padding: 32px 0;
+    text-align: center;
+    width: 570px;
+}
+
+.footer p {
+    color: #9ca3af;
+    font-size: 12px;
+    text-align: center;
+}
+
+.footer a {
+    color: #9ca3af;
+    text-decoration: underline;
+}
+
+/* Tables */
+
+.table table {
+    margin: 30px auto;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #e5e7eb;
+    margin: 0;
+    padding-bottom: 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    text-align: left;
+}
+
+.table td {
+    color: #374151;
+    font-size: 14px;
+    line-height: 1.4em;
+    margin: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid #f3f4f6;
+    text-align: left;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 40px 44px;
+}
+
+/* Panels */
+
+.panel {
+    border-left: 4px solid #0d9488;
+    background-color: #f0fdfa;
+    border-radius: 8px;
+    margin: 21px 0;
+}
+
+.panel-content {
+    background-color: #f0fdfa;
+    border-radius: 8px;
+    color: #0f172a;
+    padding: 18px 20px;
+}
+
+.panel-content p {
+    color: #0f172a;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* Buttons */
+
+.action {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 30px auto;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+}
+
+.button {
+    -webkit-text-size-adjust: none;
+    border-radius: 8px;
+    color: #ffffff;
+    display: inline-block;
+    overflow: hidden;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 12px 28px;
+}
+
+.button-teal {
+    background-color: #0d9488;
+    border-bottom: 8px solid #0d9488;
+    border-left: 18px solid #0d9488;
+    border-right: 18px solid #0d9488;
+    border-top: 8px solid #0d9488;
+}
+
+.button-indigo {
+    background-color: #4f46e5;
+    border-bottom: 8px solid #4f46e5;
+    border-left: 18px solid #4f46e5;
+    border-right: 18px solid #4f46e5;
+    border-top: 8px solid #4f46e5;
+}
+
+.button-gray {
+    background-color: #4b5563;
+    border-bottom: 8px solid #4b5563;
+    border-left: 18px solid #4b5563;
+    border-right: 18px solid #4b5563;
+    border-top: 8px solid #4b5563;
+}
+
+/* Badges (used by the three abstract-decision templates) */
+
+.badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.badge-oral {
+    background-color: #ccfbf1;
+    color: #0f766e;
+}
+
+.badge-poster {
+    background-color: #e0e7ff;
+    color: #4338ca;
+}
+
+.badge-declined {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}

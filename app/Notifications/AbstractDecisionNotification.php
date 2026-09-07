@@ -12,12 +12,18 @@ class AbstractDecisionNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /**
+     * @param string      $status           'accepted' | 'rejected'
+     * @param string|null $presentationType 'oral' | 'poster' — only meaningful when $status === 'accepted'
+     */
     public function __construct(
         private readonly AbstractSubmission $abstract,
-        private readonly string $presentationType,
+        private readonly string $status,
+        private readonly ?string $presentationType = null,
         private readonly ?int $rank = null,
         private readonly ?string $subTheme = null,
-        private readonly ?int $subThemeRank = null
+        private readonly ?int $subThemeRank = null,
+        private readonly ?string $authorName = null
     ) {
         $this->queue = 'emails';
         $this->tries = 3;
@@ -29,64 +35,46 @@ class AbstractDecisionNotification extends Notification implements ShouldQueue
         return ['mail'];
     }
 
+    /**
+     * Three genuinely different emails, not one template with an if/else:
+     *   - oral-accepted.blade.php    (top 30 / sub-theme top 5)
+     *   - poster-accepted.blade.php  (everyone else scoring >= 2.5)
+     *   - rejected.blade.php         (declined)
+     * All three share the "conference" mail theme for consistent, branded
+     * styling (see resources/views/vendor/mail/html/themes/conference.css).
+     */
     public function toMail(object $notifiable): MailMessage
     {
-        return $this->presentationType === 'oral'
-            ? $this->acceptedMessage()
-            : $this->rejectedMessage();
+        return (new MailMessage)
+            ->subject($this->subjectFor())
+            ->theme('conference')
+            ->markdown($this->viewFor(), [
+                'abstract' => $this->abstract,
+                'authorName' => $this->authorName,
+                'rank' => $this->rank,
+                'subTheme' => $this->subTheme,
+                'subThemeRank' => $this->subThemeRank,
+                'presentationType' => $this->presentationType,
+            ]);
     }
 
-    private function acceptedMessage(): MailMessage
+    private function viewFor(): string
     {
-        return (new MailMessage)
-            ->subject(
-                "Your abstract has been accepted — {$this->abstract->reference}"
-            )
-            ->greeting('Congratulations!')
-            ->line(
-                "Your abstract \"{$this->abstract->title}\" ({$this->abstract->reference}) has been accepted for the International Cancer Week 2026 Conference."
-            )
-            ->line(
-                "Presentation format: " . ucfirst($this->presentationType) . "."
-            )
-            ->line(
-                "Overall rank: " . ($this->rank ?? 'N/A') . "."
-            )
-            ->line(
-                "Sub-theme: " . ($this->subTheme ?? $this->abstract->sub_theme ?? 'N/A') . "."
-            )
-            ->line(
-                "Sub-theme rank: " . ($this->subThemeRank ?? 'N/A') . "."
-            )
-            ->line(
-                'Further details on scheduling and presentation guidelines will follow from the Abstract Committee.'
-            );
+        if ($this->status === 'accepted' && $this->presentationType === 'poster') {
+            return 'emails.abstracts.poster-accepted';
+        }
+
+        if ($this->status === 'accepted') {
+            return 'emails.abstracts.oral-accepted';
+        }
+
+        return 'emails.abstracts.rejected';
     }
 
-    private function rejectedMessage(): MailMessage
+    private function subjectFor(): string
     {
-        return (new MailMessage)
-            ->subject(
-                "Update on your abstract submission — {$this->abstract->reference}"
-            )
-            ->greeting('Hello,')
-            ->line(
-                "Thank you for submitting \"{$this->abstract->title}\" ({$this->abstract->reference}) to the International Cancer Week 2026 Conference."
-            )
-            ->line(
-                'After review, the Abstract Committee is unable to accept this abstract for presentation this year.'
-            )
-            ->line(
-                "Overall rank: " . ($this->rank ?? 'N/A') . "."
-            )
-            ->line(
-                "Sub-theme: " . ($this->subTheme ?? $this->abstract->sub_theme ?? 'N/A') . "."
-            )
-            ->line(
-                "Sub-theme rank: " . ($this->subThemeRank ?? 'N/A') . "."
-            )
-            ->line(
-                'We encourage you to submit to future editions of International Cancer Week.'
-            );
+        return $this->status === 'accepted'
+            ? "Your abstract has been accepted — {$this->abstract->reference}"
+            : "Update on your abstract submission — {$this->abstract->reference}";
     }
 }

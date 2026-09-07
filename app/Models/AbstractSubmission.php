@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-
 class AbstractSubmission extends Model
 {
     use HasFactory;
@@ -26,12 +25,17 @@ class AbstractSubmission extends Model
         'word_count',
         'status',
         'average_score',
+        'overall_rank',
+        'sub_theme_rank',
+        'classification_group',
+        'decision_notified_at',
         'submitted_at',
     ];
 
     protected $casts = [
         'average_score' => 'decimal:2',
         'submitted_at' => 'datetime',
+        'decision_notified_at' => 'datetime',
     ];
 
     public function authors(): HasMany
@@ -39,17 +43,11 @@ class AbstractSubmission extends Model
         return $this->hasMany(AbstractAuthor::class, 'abstract_id')->orderBy('order');
     }
 
-    // public function correspondingAuthor(): ?AbstractAuthor
-    // {
-    //     return $this->authors()->where('is_corresponding', true)->first()
-    //         ?? $this->authors()->first();
-    // }
-
-public function correspondingAuthor(): HasOne
-{
-    return $this->hasOne(AbstractAuthor::class, 'abstract_id')
-        ->where('is_corresponding', true);
-}
+    public function correspondingAuthor(): HasOne
+    {
+        return $this->hasOne(AbstractAuthor::class, 'abstract_id')
+            ->where('is_corresponding', true);
+    }
 
     public function assignments(): HasMany
     {
@@ -89,56 +87,10 @@ public function correspondingAuthor(): HasOne
         $this->save();
     }
 
-
-    /**
-     * Determine presentation type based on ranking
-     */
-    public function determinePresentationType(array $rankings): string
-    {
-        // Check if in overall top 30
-        $overallRank = collect($rankings['overall'] ?? [])
-            ->firstWhere('abstract.id', $this->id);
-            
-        if ($overallRank && $overallRank['rank'] <= 30) {
-            return 'oral';
-        }
-        
-        // Check if in sub-theme top 5
-        $subThemeRank = collect($rankings['sub_themes'][$this->sub_theme] ?? [])
-            ->firstWhere('abstract.id', $this->id);
-            
-        if ($subThemeRank && $subThemeRank['rank'] <= 5) {
-            return 'oral';
-        }
-        
-        return 'poster';
-    }
-    
-    /**
-     * Classify all accepted abstracts
-     */
-    public static function classifyAcceptedAbstracts(): array
-    {
-        $rankingService = app(AbstractRankingService::class);
-        $rankings = [
-            'overall' => $rankingService->getOverallRanking(),
-            'sub_themes' => $rankingService->getSubThemeRanking(),
-        ];
-        
-        $acceptedAbstracts = self::where('status', 'accepted')->get();
-        $classified = [];
-        
-        foreach ($acceptedAbstracts as $abstract) {
-            $presentationType = $abstract->determinePresentationType($rankings);
-            $abstract->update(['presentation_type' => $presentationType]);
-            $classified[] = [
-                'abstract_id' => $abstract->id,
-                'title' => $abstract->title,
-                'presentation_type' => $presentationType,
-                'score' => $abstract->average_score,
-            ];
-        }
-        
-        return $classified;
-    }
+    // NOTE: the old determinePresentationType()/classifyAcceptedAbstracts()
+    // helpers that used to live here have been removed — that logic now
+    // lives entirely in App\Services\AbstractRankingService, which computes
+    // top30 / sub-theme-top5 / poster / pending as one consistent pass
+    // instead of re-deriving a rank per abstract independently. See
+    // AbstractRankingService::classify() and ::apply().
 }

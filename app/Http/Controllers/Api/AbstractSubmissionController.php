@@ -75,16 +75,16 @@ class AbstractSubmissionController extends Controller
             ->setStatusCode(201);
     }
 
-    private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
-    {
-        $author = $abstract->correspondingAuthor();
-        if (! $author || ! $author->email) {
-            return;
-        }
+    // private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
+    // {
+    //     $author = $abstract->correspondingAuthor();
+    //     if (! $author || ! $author->email) {
+    //         return;
+    //     }
 
-        Notification::route('mail', $author->email)
-            ->notify(new AbstractSubmittedNotification($abstract));
-    }
+    //     Notification::route('mail', $author->email)
+    //         ->notify(new AbstractSubmittedNotification($abstract));
+    // }
 
     /**
      * GET /api/abstracts
@@ -165,14 +165,57 @@ class AbstractSubmissionController extends Controller
         ]);
     }
 
-    private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
-    {
-        $author = $abstract->correspondingAuthor();
-        if (! $author || ! $author->email) {
-            return;
-        }
+    // private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
+    // {
+    //     $author = $abstract->correspondingAuthor();
+    //     if (! $author || ! $author->email) {
+    //         return;
+    //     }
 
-        Notification::route('mail', $author->email)
-            ->notify(new AbstractDecisionNotification($abstract));
+    //     Notification::route('mail', $author->email)
+    //         ->notify(new AbstractDecisionNotification($abstract));
+    // }
+
+    
+
+
+private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
+{
+    $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
+ 
+    if (! $author || ! $author->email) {
+        return;
     }
+ 
+    Notification::route('mail', $author->email)->notify(
+        new AbstractDecisionNotification(
+            $abstract,
+            $abstract->status,               // 'accepted' | 'rejected'
+            $abstract->presentation_type,    // 'oral' | 'poster' | null
+            $abstract->overall_rank,
+            $abstract->sub_theme,
+            $abstract->sub_theme_rank
+        )
+    );
+ 
+    $abstract->forceFill(['decision_notified_at' => now()])->save();
+}
+ 
+/**
+ * Also apply the same ->first() fix inside notifyAuthorOfSubmission()
+ * a few lines above it, for the same reason:
+ */
+ 
+private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
+{
+    $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
+    if (! $author || ! $author->email) {
+        return;
+    }
+ 
+    Notification::route('mail', $author->email)
+        ->notify(new AbstractSubmittedNotification($abstract));
+}
+ 
+
 }
