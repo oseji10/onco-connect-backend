@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
 
 class AbstractSubmission extends Model
 {
@@ -37,11 +39,17 @@ class AbstractSubmission extends Model
         return $this->hasMany(AbstractAuthor::class, 'abstract_id')->orderBy('order');
     }
 
-    public function correspondingAuthor(): ?AbstractAuthor
-    {
-        return $this->authors()->where('is_corresponding', true)->first()
-            ?? $this->authors()->first();
-    }
+    // public function correspondingAuthor(): ?AbstractAuthor
+    // {
+    //     return $this->authors()->where('is_corresponding', true)->first()
+    //         ?? $this->authors()->first();
+    // }
+
+public function correspondingAuthor(): HasOne
+{
+    return $this->hasOne(AbstractAuthor::class, 'abstract_id')
+        ->where('is_corresponding', true);
+}
 
     public function assignments(): HasMany
     {
@@ -79,5 +87,58 @@ class AbstractSubmission extends Model
             : 'under_review';
 
         $this->save();
+    }
+
+
+    /**
+     * Determine presentation type based on ranking
+     */
+    public function determinePresentationType(array $rankings): string
+    {
+        // Check if in overall top 30
+        $overallRank = collect($rankings['overall'] ?? [])
+            ->firstWhere('abstract.id', $this->id);
+            
+        if ($overallRank && $overallRank['rank'] <= 30) {
+            return 'oral';
+        }
+        
+        // Check if in sub-theme top 5
+        $subThemeRank = collect($rankings['sub_themes'][$this->sub_theme] ?? [])
+            ->firstWhere('abstract.id', $this->id);
+            
+        if ($subThemeRank && $subThemeRank['rank'] <= 5) {
+            return 'oral';
+        }
+        
+        return 'poster';
+    }
+    
+    /**
+     * Classify all accepted abstracts
+     */
+    public static function classifyAcceptedAbstracts(): array
+    {
+        $rankingService = app(AbstractRankingService::class);
+        $rankings = [
+            'overall' => $rankingService->getOverallRanking(),
+            'sub_themes' => $rankingService->getSubThemeRanking(),
+        ];
+        
+        $acceptedAbstracts = self::where('status', 'accepted')->get();
+        $classified = [];
+        
+        foreach ($acceptedAbstracts as $abstract) {
+            $presentationType = $abstract->determinePresentationType($rankings);
+            $abstract->update(['presentation_type' => $presentationType]);
+            $classified[] = [
+                'abstract_id' => $abstract->id,
+                'title' => $abstract->title,
+                'presentation_type' => $presentationType,
+                'score' => $abstract->average_score,
+            ];
+        }
+        
+        return $classified;
     }
 }

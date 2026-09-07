@@ -45,6 +45,8 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PasswordSetupController;
 use App\Http\Controllers\Api\ConferenceSettingController;
 
+use App\Http\Controllers\Api\AbstractRankingController;
+
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
@@ -100,6 +102,32 @@ Route::middleware(['auth:api', 'password.changed', 'role:super_admin'])->prefix(
 Route::middleware(['auth:api', 'facility.scope', 'password.changed',])->group(function () {
 
 Route::patch('/conference-settings', [ConferenceSettingController::class, 'update']);
+
+
+    // Route::get('admin/rankings', [AbstractRankingController::class, 'index']);
+    
+    Route::post('admin/rankings/classify-and-notify', [AbstractRankingController::class, 'classifyAndNotify']);
+    
+    Route::post('admin/rankings/{abstractId}/resend-notification', [AbstractRankingController::class, 'resendNotification']);
+
+   // routes/api.php
+
+
+        // Admin gets all rankings
+        Route::get('/admin/rankings', [AbstractRankingController::class, 'index']);
+        
+        // Admin classification and notifications
+        Route::post('/admin/rankings/classify', [AbstractRankingController::class, 'classifyAndNotify']);
+        Route::post('/admin/rankings/resend/{abstractId}', [AbstractRankingController::class, 'resendNotification']);
+        
+        // Admin export
+        Route::get('/admin/rankings/export', [AbstractRankingController::class, 'export']);
+    
+    
+    // Reviewer routes - available to all authenticated users
+    Route::get('/reviewer/rankings', [AbstractRankingController::class, 'reviewerRankings']);
+    Route::get('/reviewer/rankings/export', [AbstractRankingController::class, 'export']);
+    Route::get('/reviewer/rankings/statistics', [AbstractRankingController::class, 'reviewerStatistics']);
 
 // Admin — TODO: add role middleware once available.
     Route::get('/speakers', [SpeakerController::class, 'index']);
