@@ -35,7 +35,7 @@ Your abstract has been accepted for an **oral presentation** at
 </x-mail::table>
 
 Full details on scheduling, session timing, and presentation guidelines will
-follow shortly from the Abstract Committee. Please keep an eye on your inbox
+follow shortly from the Scientific & Abstract Committee. Please keep an eye on your inbox
 for that follow-up.
 
 We look forward to your presentation.

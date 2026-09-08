@@ -30,7 +30,7 @@ Your abstract has been accepted for a **poster presentation** at
 
 Poster presentations are a core part of the conference program and a great
 way to get direct, extended feedback from attendees. Printing specifications,
-board dimensions, and set-up times will follow shortly from the Abstract
+board dimensions, and set-up times will follow shortly from the Scientific & Abstract
 Committee.
 
 We look forward to seeing your work on display.
