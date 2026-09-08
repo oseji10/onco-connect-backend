@@ -36,7 +36,7 @@ Committee.
 We look forward to seeing your work on display.
 
 Warm regards,<br>
-The Abstract Committee
+Scientific & Abstract Committee
 
 <x-slot:subcopy>
 This is an automated notification regarding submission {{ $abstract->reference }}.

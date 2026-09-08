@@ -25,11 +25,11 @@ decision here reflects the volume and quality of submissions received rather
 than any single shortcoming in your work.
 
 We genuinely encourage you to submit to future editions of
-{{ config('app.name', 'International Cancer Week') }}, and thank you again
+ICW, and thank you again
 for your contribution to the field.
 
 Warm regards,<br>
-The Abstract Committee
+Scientific & Abstract Committee
 
 <x-slot:subcopy>
 This is an automated notification regarding submission {{ $abstract->reference }}.

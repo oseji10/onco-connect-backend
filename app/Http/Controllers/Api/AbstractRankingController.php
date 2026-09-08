@@ -140,7 +140,13 @@ class AbstractRankingController extends Controller
 
         $abstract->forceFill([
             'status' => $validated['status'],
-            'presentation_type' => $validated['status'] === 'accepted' ? $validated['presentationType'] : null,
+            // presentation_type is NOT NULL in the schema (it's set at
+            // submission time from the author's requested format), so a
+            // rejection leaves it as-is instead of nulling it out — only
+            // an acceptance overrides it with the committee's decision.
+            'presentation_type' => $validated['status'] === 'accepted'
+                ? $validated['presentationType']
+                : $abstract->presentation_type,
             'classification_group' => 'manual',
         ])->save();
 

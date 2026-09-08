@@ -28,7 +28,7 @@ Your abstract has been accepted for an **oral presentation** at
 @endif
 @if($subTheme && $subThemeRank)
 | Sub-theme | **{{ $subTheme }}** |
-| Sub-theme rank | **#{{ $subThemeRank }}** |
+<!-- | Sub-theme rank | **#{{ $subThemeRank }}** | -->
 @elseif($subTheme)
 | Sub-theme | **{{ $subTheme }}** |
 @endif
@@ -41,7 +41,7 @@ for that follow-up.
 We look forward to your presentation.
 
 Warm regards,<br>
-The Abstract Committee
+Scientific & Abstract Committee
 
 <x-slot:subcopy>
 This is an automated notification regarding submission {{ $abstract->reference }}.
