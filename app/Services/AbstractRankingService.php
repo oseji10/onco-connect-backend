@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AbstractSubmission;
+use App\Notifications\AbstractCustomNotification;
 use App\Notifications\AbstractDecisionNotification;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -195,29 +196,73 @@ class AbstractRankingService
             return;
         }
 
-        // Notification::route('mail', ['address' => $author->email, 'name' => $author->name])->notify(
-        //     new AbstractDecisionNotification(
-        //         $abstract,
-        //         $status,
-        //         $presentationType,
-        //         $rank,
-        //         $subTheme,
-        //         $subThemeRank,
-        //         $author->name
-        //     )
-        // );
-
         Notification::route('mail', [$author->email => $author->name])->notify(
-    new AbstractDecisionNotification(
-        $abstract,
-        $status,
-        $presentationType,
-        $rank,
-        $subTheme,
-        $subThemeRank,
-        $author->name
-    )
-);
+            new AbstractDecisionNotification(
+                $abstract,
+                $status,
+                $presentationType,
+                $rank,
+                $subTheme,
+                $subThemeRank,
+                $author->name
+            )
+        );
+
         $abstract->forceFill(['decision_notified_at' => now()])->save();
+    }
+
+    /**
+     * Send the same free-text subject/message to a set of abstracts'
+     * corresponding authors. Used for both category broadcasts (e.g. every
+     * oral presenter) and ad-hoc selected-abstract sends. Unlike
+     * sendNotification(), this never touches status, presentation_type,
+     * or decision_notified_at — it's explicitly not a decision.
+     *
+     * @param  Collection<int, AbstractSubmission>  $abstracts
+     * @return array{sent:int, skipped_no_email:int}
+     */
+    public function sendCustomToAbstracts(Collection $abstracts, string $subject, string $body): array
+    {
+        $sent = 0;
+        $skippedNoEmail = 0;
+
+        foreach ($abstracts as $abstract) {
+            /** @var AbstractSubmission $abstract */
+            $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
+
+            if (! $author || ! $author->email) {
+                $skippedNoEmail++;
+                continue;
+            }
+
+            Notification::route('mail', [$author->email => $author->name])->notify(
+                new AbstractCustomNotification($abstract, $subject, $body, $author->name)
+            );
+
+            $sent++;
+        }
+
+        return ['sent' => $sent, 'skipped_no_email' => $skippedNoEmail];
+    }
+
+    /**
+     * Resolve a named category to a base query. Used by the custom-message
+     * endpoint so "oral presenters" / "poster presenters" / etc. stay in
+     * one place rather than being re-derived in the controller.
+     */
+    public function abstractsForCategory(string $category): Collection
+    {
+        $query = AbstractSubmission::query()->with('authors');
+
+        match ($category) {
+            'oral' => $query->where('status', 'accepted')->where('presentation_type', 'oral'),
+            'poster' => $query->where('status', 'accepted')->where('presentation_type', 'poster'),
+            'pending' => $query->where('classification_group', 'pending'),
+            'rejected' => $query->where('status', 'rejected'),
+            'all' => null,
+            default => throw new \InvalidArgumentException("Unknown category [{$category}]."),
+        };
+
+        return $query->get();
     }
 }

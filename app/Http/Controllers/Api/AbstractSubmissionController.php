@@ -178,7 +178,6 @@ class AbstractSubmissionController extends Controller
 
     
 
-
 private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
 {
     $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
@@ -187,14 +186,15 @@ private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
         return;
     }
  
-    Notification::route('mail', $author->email)->notify(
+    Notification::route('mail', [$author->email => $author->name])->notify(
         new AbstractDecisionNotification(
             $abstract,
             $abstract->status,               // 'accepted' | 'rejected'
             $abstract->presentation_type,    // 'oral' | 'poster' | null
             $abstract->overall_rank,
             $abstract->sub_theme,
-            $abstract->sub_theme_rank
+            $abstract->sub_theme_rank,
+            $author->name
         )
     );
  
@@ -216,6 +216,4 @@ private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
     Notification::route('mail', $author->email)
         ->notify(new AbstractSubmittedNotification($abstract));
 }
- 
-
 }

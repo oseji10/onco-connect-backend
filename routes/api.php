@@ -48,6 +48,7 @@ use App\Http\Controllers\Api\ConferenceSettingController;
 use App\Http\Controllers\Api\AbstractRankingController;
 
 
+
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);
 Route::post('/abstracts/submit', [AbstractSubmissionController::class, 'store'])
     ->middleware('throttle:10,1');
@@ -124,12 +125,21 @@ Route::patch('/conference-settings', [ConferenceSettingController::class, 'updat
 //         Route::get('/admin/rankings/export', [AbstractRankingController::class, 'export']);
     
     
+// Route::get('/abstracts/rankings', [AbstractRankingController::class, 'preview']);
+// Route::post('/abstracts/rankings/process', [AbstractRankingController::class, 'process']);
+// Route::get('/abstracts/rankings/notifications', [AbstractRankingController::class, 'notificationStatus']);
+ 
+// Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
+// Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
+
+
 Route::get('/abstracts/rankings', [AbstractRankingController::class, 'preview']);
 Route::post('/abstracts/rankings/process', [AbstractRankingController::class, 'process']);
 Route::get('/abstracts/rankings/notifications', [AbstractRankingController::class, 'notificationStatus']);
  
 Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
 Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
+Route::post('/abstracts/notifications/custom', [AbstractRankingController::class, 'sendCustom']);
 
     // Reviewer routes - available to all authenticated users
     Route::get('/reviewer/rankings', [AbstractRankingController::class, 'reviewerRankings']);

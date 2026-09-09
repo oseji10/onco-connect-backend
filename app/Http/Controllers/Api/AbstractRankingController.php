@@ -168,6 +168,67 @@ class AbstractRankingController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/abstracts/notifications/custom
+     * Send the same free-text subject/message either to an entire named
+     * category, or to a specific set of hand-picked abstracts. Exactly one
+     * of `category` / `abstractIds` must be supplied. This never changes
+     * status/presentation_type and never touches decision_notified_at —
+     * it's an ad-hoc message, not a decision.
+     *
+     * Body:
+     *   { category: 'oral'|'poster'|'pending'|'rejected'|'all', subject, message }
+     *   OR
+     *   { abstractIds: number[], subject, message }
+     */
+    public function sendCustom(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category' => ['nullable', Rule::in(['oral', 'poster', 'pending', 'rejected', 'all'])],
+            'abstractIds' => ['nullable', 'array', 'min:1'],
+            'abstractIds.*' => ['integer', 'exists:abstracts,id'],
+            'subject' => ['required', 'string', 'max:255'],
+            'message' => ['required', 'string', 'max:10000'],
+        ]);
+
+        $hasCategory = ! empty($validated['category']);
+        $hasIds = ! empty($validated['abstractIds']);
+
+        if ($hasCategory === $hasIds) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Provide exactly one of "category" or "abstractIds".',
+            ], 422);
+        }
+
+        $abstracts = $hasIds
+            ? AbstractSubmission::query()->with('authors')->whereIn('id', $validated['abstractIds'])->get()
+            : $this->rankingService->abstractsForCategory($validated['category']);
+
+        if ($abstracts->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No matching abstracts to send to.',
+            ], 422);
+        }
+
+        $result = $this->rankingService->sendCustomToAbstracts(
+            $abstracts,
+            $validated['subject'],
+            $validated['message']
+        );
+
+        $skippedNote = $result['skipped_no_email'] > 0
+            ? ", {$result['skipped_no_email']} skipped (no author email on file)"
+            : '';
+
+        return response()->json([
+            'success' => true,
+            'message' => "Sent to {$result['sent']} recipient(s){$skippedNote}.",
+            'data' => $result,
+        ]);
+    }
+
     private function formatClassification(array $classification): array
     {
         return [
