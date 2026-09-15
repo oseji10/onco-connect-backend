@@ -82,6 +82,7 @@ public function __construct(
                     'stateOfResidence' => $attendee->stateOfResidence,
                     'photoUrl' => $attendee->photoUrl,
                     'country' => $attendee->country,
+                    'phoneCountryCode' => $attendee->phoneCountryCode,
                 ];
             });
 
