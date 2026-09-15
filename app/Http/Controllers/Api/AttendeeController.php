@@ -56,6 +56,7 @@ public function __construct(
                 'participationType',
                 'category',
                 'stateOfResidence',
+                'phoneCountryCode',
                 'title',
                 'photoUrl',
                 'country',
