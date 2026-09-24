@@ -33,6 +33,7 @@ class UserController extends Controller
         'reviewer',
         'registration_desk_officer',
         'abstract_committee_member',
+        'author',
     ];
 
     protected array $roleLabels = [
@@ -41,6 +42,7 @@ class UserController extends Controller
         'reviewer' => 'Reviewer',
         'registration_desk_officer' => 'Registration Desk Officer',
         'abstract_committee_member' => 'Abstract Committee Member',
+        'author' => 'Author',
     ];
 
     public function index(): JsonResponse
@@ -89,7 +91,9 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phoneNumber' => ['required', 'string', 'max:20'],
             'alternatePhoneNumber' => ['nullable', 'string', 'max:20'],
-            'role' => ['required', Rule::in($this->assignableRoles)],
+            // 'role' => ['required', Rule::in($this->assignableRoles)],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => [Rule::in($this->assignableRoles)],
             'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
 

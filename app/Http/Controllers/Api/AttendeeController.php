@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 use App\Mail\AttendeePassMail;
 use App\Services\EventPassGeneratorService;
@@ -24,12 +25,11 @@ use Illuminate\Support\Facades\Hash;
 
 class AttendeeController extends Controller
 {
-
-public function __construct(
-    protected EventPassGeneratorService $passGenerator,
-    protected QrCodeService $qrCodeService,
-    protected PassPdfService $passPdfService,
-) {}
+    public function __construct(
+        protected EventPassGeneratorService $passGenerator,
+        protected QrCodeService $qrCodeService,
+        protected PassPdfService $passPdfService,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -60,7 +60,6 @@ public function __construct(
                 'title',
                 'photoUrl',
                 'country',
-
             ])
             ->orderBy('created_at', 'desc')
             ->get()
@@ -70,7 +69,11 @@ public function __construct(
                     'title' => $attendee->title,
                     'firstName' => $attendee->firstName,
                     'lastName' => $attendee->lastName,
-                    'fullName' => trim(($attendee->firstName ?? '') . ' ' . ($attendee->lastName ?? '') . ' ' . ($attendee->otherNames ?? '')),
+                    'fullName' => trim(
+                        ($attendee->firstName ?? '') . ' ' .
+                        ($attendee->lastName ?? '') . ' ' .
+                        ($attendee->otherNames ?? '')
+                    ),
                     'uniqueId' => $attendee->uniqueId,
                     'phoneNumber' => $attendee->phoneNumber,
                     'gender' => $attendee->gender,
@@ -93,367 +96,540 @@ public function __construct(
         ]);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $activeEvent = Event::where('status', 'active')->first();
 
-
-// public function store(Request $request): JsonResponse
-// {
-//     $activeEvent = Event::where('status', 'active')->first();
-
-//     if (!$activeEvent) {
-//         return response()->json([
-//             'success' => false,
-//             'message' => 'No active event found.',
-//         ], 404);
-//     }
-
-//     $validated = $request->validate([
-//         'title' => ['required', 'string', 'max:255'],
-//         'firstName' => ['required', 'string'],
-//         'lastName' => ['required', 'string'],
-//         'otherNames' => ['nullable', 'string'],
-//         'email' => ['nullable', 'string'],
-//         'phoneNumber' => ['nullable', 'string'],
-//         'gender' => ['nullable', 'string'],
-//         'maritalStatus' => ['nullable', 'string'],
-//         'organizationName' => ['nullable', 'string'],
-//         'stateOfResidence' => ['nullable', 'string'],
-//         'category' => [
-//             'required',
-//             Rule::in(['healthcare_professional', 'cancer_survivor', 'development_partner', 'student', 'researcher', 'general_public', 'government_official', 'other']),
-//         ],
-//         'participationType' => [
-//             'required',
-//             Rule::in(['Physical', 'Virtual']),
-//         ],
-//         'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'], // Max 2MB
-//     ]);
-
-//     return DB::transaction(function () use ($validated, $activeEvent, $request) {
-//     $attendeeData = [
-//         'eventId' => $activeEvent->eventId,
-//         'title' => trim($validated['title']),
-//         'category' => trim($validated['category']),
-//         'firstName' => $validated['firstName'],
-//         'lastName' => $validated['lastName'],
-//         'otherNames' => $validated['otherNames'] ?? null,
-//         'phoneNumber' => $validated['phoneNumber'] ?? null,
-//         'email' => $validated['email'] ?? null,
-//         'gender' => $validated['gender'] ?? null,
-//         'maritalStatus' => $validated['maritalStatus'] ?? null,
-//         'participationType' => $validated['participationType'],
-//         'organizationName' => $validated['organizationName'] ?? null,
-//         'stateOfResidence' => $validated['stateOfResidence'] ?? null,
-//         'uniqueId' => $this->generateUniqueId(),
-//         'registeredBy' => Auth::id(),
-//     ];
-
-//     if ($request->hasFile('photo')) {
-//         $photo = $request->file('photo');
-//         $filename = time() . '_' . uniqid() . '.' . $photo->getClientOriginalExtension();
-//         $path = $photo->storeAs('attendee_photos', $filename, 'public');
-
-//         $attendeeData['photoUrl'] = $path;
-//     }
-
-//     $attendee = Attendee::create($attendeeData);
-
-//     return response()->json([
-//         'success' => true,
-//         'message' => 'Attendee registered successfully.',
-//         'data' => $attendee,
-//     ], 201);
-// });
-// }
-
-
-
-
-public function store(Request $request): JsonResponse
-{
-    $activeEvent = Event::where('status', 'active')->first();
-
-    if (!$activeEvent) {
-        return response()->json([
-            'success' => false,
-            'message' => 'No active event found.',
-        ], 404);
-    }
-
-    $validated = $request->validate([
-        'title' => ['required', 'string', 'max:255'],
-        'firstName' => ['required', 'string'],
-        'lastName' => ['required', 'string'],
-        'otherNames' => ['nullable', 'string'],
-        'email' => ['nullable', 'string'],
-        'phoneNumber' => ['nullable', 'string'],
-        'gender' => ['nullable', 'string'],
-        'maritalStatus' => ['nullable', 'string'],
-        'organizationName' => ['nullable', 'string'],
-        'stateOfResidence' => ['nullable', 'string'],
-        'physicallyChallenged' => ['nullable', 'boolean'],
-        'accessibilityNeeds' => ['nullable', 'string'],
-        'country' => ['nullable', 'string'],
-
-        'category' => [
-            'required',
-            Rule::in(['healthcare_professional', 'cancer_advocate', 'cancer_survivor', 'development_partner', 'student', 'researcher', 'general_public', 'government_official', 'other', 'radiographer', 'nurse', 'doctor', 'pharmacist', 'lab_scientist', 'medical_physicist', 'other_health_worker']),
-        ],
-        'participationType' => [
-            'required',
-            Rule::in(['Physical', 'Virtual']),
-        ],
-        'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'], // Max 2MB
-    ]);
-
-    return DB::transaction(function () use ($validated, $activeEvent, $request) {
-        $attendeeData = [
-           'eventId' => $activeEvent->eventId,
-        'title' => trim($validated['title']),
-        'category' => trim($validated['category']),
-        'firstName' => $validated['firstName'],
-        'lastName' => $validated['lastName'],
-        'otherNames' => $validated['otherNames'] ?? null,
-        'phoneNumber' => $validated['phoneNumber'] ?? null,
-        'email' => $validated['email'] ?? null,
-        'gender' => $validated['gender'] ?? null,
-        'maritalStatus' => $validated['maritalStatus'] ?? null,
-        'participationType' => $validated['participationType'],
-        'organizationName' => $validated['organizationName'] ?? null,
-        'stateOfResidence' => $validated['stateOfResidence'] ?? null,
-        'uniqueId' => $this->generateUniqueId(),
-        'registeredBy' => Auth::id(),
-        ];
-
-        if ($request->hasFile('photo')) {
-            $photo    = $request->file('photo');
-            $filename = time() . '_' . uniqid() . '.' . $photo->getClientOriginalExtension();
-            $path     = $photo->storeAs('attendee_photos', $filename, 'public');
-            $attendeeData['photoUrl'] = $path;
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
         }
 
-        $attendee = Attendee::create($attendeeData);
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'firstName' => ['required', 'string'],
+            'lastName' => ['required', 'string'],
+            'otherNames' => ['nullable', 'string'],
+            'email' => ['nullable', 'string'],
+            'phoneNumber' => ['nullable', 'string'],
+            'gender' => ['nullable', 'string'],
+            'maritalStatus' => ['nullable', 'string'],
+            'organizationName' => ['nullable', 'string'],
+            'stateOfResidence' => ['nullable', 'string'],
+            'physicallyChallenged' => ['nullable', 'boolean'],
+            'accessibilityNeeds' => ['nullable', 'string'],
+            'country' => ['nullable', 'string'],
 
-    // ── Create User account ────────────────────────────────────────────
-    $plainPassword = null;
-    $user          = null;
+            'category' => [
+                'required',
+                Rule::in([
+                    'healthcare_professional',
+                    'cancer_advocate',
+                    'cancer_survivor',
+                    'development_partner',
+                    'student',
+                    'researcher',
+                    'general_public',
+                    'government_official',
+                    'other',
+                    'radiographer',
+                    'nurse',
+                    'doctor',
+                    'pharmacist',
+                    'lab_scientist',
+                    'medical_physicist',
+                    'other_health_worker',
+                ]),
+            ],
 
-    if (!empty($attendee->email)) {
-        $participantRole = Role::where('roleName', 'participant')->first();
+            'participationType' => [
+                'required',
+                Rule::in(['Physical', 'Virtual']),
+            ],
 
-        if (!$participantRole) {
-            throw new \RuntimeException(
-                'Participant role not found. Please seed the roles table.'
-            );
-        }
+            'photo' => [
+                'nullable',
+                'image',
+                'mimes:jpeg,png,jpg',
+                'max:2048',
+            ],
+        ]);
 
-        // Guard against duplicate email (re-registration edge case)
-        $existingUser = User::where('email', $attendee->email)->first();
+        return DB::transaction(function () use ($validated, $activeEvent, $request) {
 
-        if (!$existingUser) {
-            $plainPassword = Str::random(10);
+            /*
+             * ---------------------------------------------------------
+             * 1. Create attendee
+             * ---------------------------------------------------------
+             */
+            $attendeeData = [
+                'eventId' => $activeEvent->eventId,
+                'title' => trim($validated['title']),
+                'category' => trim($validated['category']),
+                'firstName' => $validated['firstName'],
+                'lastName' => $validated['lastName'],
+                'otherNames' => $validated['otherNames'] ?? null,
+                'phoneNumber' => $validated['phoneNumber'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'gender' => $validated['gender'] ?? null,
+                'maritalStatus' => $validated['maritalStatus'] ?? null,
+                'participationType' => $validated['participationType'],
+                'organizationName' => $validated['organizationName'] ?? null,
+                'stateOfResidence' => $validated['stateOfResidence'] ?? null,
+                'physicallyChallenged' => $validated['physicallyChallenged'] ?? false,
+                'accessibilityNeeds' => $validated['accessibilityNeeds'] ?? null,
+                'country' => $validated['country'] ?? null,
+                'uniqueId' => $this->generateUniqueId(),
+                'registeredBy' => Auth::id(),
+            ];
 
-            $user = User::create([
-                'facilityId'  => null,
-                'firstName'   => $attendee->firstName,
-                'lastName'    => $attendee->lastName,
-                'email'       => $attendee->email,
-                'phoneNumber' => $attendee->phoneNumber,
-                'password'    => Hash::make($plainPassword),
-                'role'        => $participantRole->roleId,
-                'status'      => 'active',
-            ]);
-        } else {
-            $user = $existingUser;
-        }
+            /*
+             * Photo upload.
+             */
+            if ($request->hasFile('photo')) {
+                $photo = $request->file('photo');
 
-        // Link user back to attendee
-        $attendee->update(['userId' => $user->id]);
-    }
+                $filename =
+                    time() .
+                    '_' .
+                    uniqid() .
+                    '.' .
+                    $photo->getClientOriginalExtension();
 
-    // ── Generate pass ──────────────────────────────────────────────────
-    $pass = EventPass::create([
-        'eventId'      => $activeEvent->eventId,
-        'attendeeId'   => $attendee->getKey(),
-        'passCode'     => bin2hex(random_bytes(16)),
-        'serialNumber' => $this->generateSerialNumber($activeEvent),
-        'status'       => 'active',
-    ]);
+                $path = $photo->storeAs(
+                    'attendee_photos',
+                    $filename,
+                    'public'
+                );
 
-    $this->qrCodeService->generateForEventPass($pass);
-    $pass = $pass->fresh();
-
-    $pdfContent = $this->passPdfService->generate($attendee, $pass);
-
-    if (!empty($attendee->email)) {
-        Mail::to($attendee->email)
-            ->send(new AttendeePassMail($attendee, $pass, $pdfContent, $plainPassword));
-    }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Attendee registered successfully.' .
-                     (empty($attendee->email) ? '' : ' Pass and login credentials sent to email.'),
-        'data'    => $attendee->load(['pass', 'user']),
-    ], 201);
-});
-
-}
-
-
-
-public function resendPass(Attendee $attendee): JsonResponse
-{
-    if (empty($attendee->email)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'This participant has no email address on record.',
-        ], 422);
-    }
-
-    $pass = $attendee->pass; // assumes HasOne relationship
-
-    if (!$pass) {
-        return response()->json([
-            'success' => false,
-            'message' => 'No pass found for this participant.',
-        ], 404);
-    }
-
-    // Regenerate QR (in case it was lost too)
-    $this->qrCodeService->generateForEventPass($pass);
-    $pass->refresh();
-
-    // Regenerate PDF in memory and send
-    $pdfContent = $this->passPdfService->generate($attendee, $pass);
-
-    Mail::to($attendee->email)
-        ->send(new AttendeePassMail($attendee, $pass, $pdfContent));
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Pass resent successfully to ' . $attendee->email,
-    ]);
-}
-
-private function generateSerialNumber(Event $event): string
-{
-    $count = $event->passes()->count();
-    return strtoupper('ICW-' . str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT));
-}
-
-public function update(Request $request): JsonResponse
-{
-    $activeEvent = Event::where('status', 'active')->first();
-
-    if (!$activeEvent) {
-        return response()->json([
-            'success' => false,
-            'message' => 'No active event found.',
-        ], 404);
-    }
-
-    $validated = $request->validate([
-        'title' => ['required', 'string', 'max:255'],
-        'firstName' => ['required', 'string'],
-        'lastName' => ['required', 'string'],
-        'otherNames' => ['nullable', 'string'],
-        'email' => ['nullable', 'string'],
-        'phoneNumber' => ['nullable', 'string'],
-        'gender' => ['nullable', 'string'],
-        'maritalStatus' => ['nullable', 'string'],
-        'organizationName' => ['nullable', 'string'],
-        'stateOfResidence' => ['nullable', 'string'],
-        'category' => [
-            'required',
-            Rule::in([
-                'healthcare_professional',
-                'cancer_survivor',
-                'development_partner',
-                'student',
-                'researcher',
-                'general_public',
-                'government_official',
-                'other'
-            ]),
-        ],
-        'participationType' => [
-            'required',
-            Rule::in(['Physical', 'Virtual']),
-        ],
-        'photo' => ['nullable', 'image', 'mimes:jpeg,png,jpg', 'max:2048'], // Max 2MB
-    ]);
-
-    $attendee = Attendee::where('attendeeId', $request->attendeeId)->first();
-
-    if (!$attendee) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Attendee not found.',
-        ], 404);
-    }
-
-    return DB::transaction(function () use ($validated, $attendee, $request) {
-        $updateData = $validated;
-        unset($updateData['attendeeId']);
-
-        // Handle photo upload
-        if ($request->hasFile('photo')) {
-            // Delete old photo if exists
-            if ($attendee->photo && Storage::disk('public')->exists($attendee->photo)) {
-                Storage::disk('public')->delete($attendee->photo);
+                $attendeeData['photoUrl'] = $path;
             }
 
-            $photo = $request->file('photo');
-            $filename = time() . '_' . uniqid() . '.' . $photo->getClientOriginalExtension();
-            $path = $photo->storeAs('attendee_photos', $filename, 'public');
-            $updateData['photoUrl'] = $path;
-        }
+            $attendee = Attendee::create($attendeeData);
 
-        $attendee->update($updateData);
+            /*
+             * ---------------------------------------------------------
+             * 2. Create/find User account
+             * ---------------------------------------------------------
+             */
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registration updated successfully.',
-            'data' => $attendee->fresh(),
-        ]);
-    });
-}
+            $plainPassword = null;
+            $user = null;
 
-// Add this method to handle photo deletion if needed
-public function deletePhoto(Request $request): JsonResponse
-{
-    $request->validate([
-        'attendeeId' => ['required', 'exists:attendees,attendeeId'],
-    ]);
+            if (!empty($attendee->email)) {
 
-    $attendee = Attendee::where('attendeeId', $request->attendeeId)->first();
+                /*
+                 * Find the participant role.
+                 */
+                $participantRole = Role::where(
+                    'roleName',
+                    'participant'
+                )->first();
 
-    if (!$attendee) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Attendee not found.',
-        ], 404);
+                if (!$participantRole) {
+                    throw new \RuntimeException(
+                        'Participant role not found. Please seed the roles table.'
+                    );
+                }
+
+                /*
+                 * Guard against duplicate email / re-registration.
+                 */
+                $existingUser = User::where(
+                    'email',
+                    $attendee->email
+                )->first();
+
+                if (!$existingUser) {
+
+                    /*
+                     * New user.
+                     */
+                    $plainPassword = Str::random(10);
+
+                    $user = User::create([
+                        'facilityId' => null,
+                        'firstName' => $attendee->firstName,
+                        'lastName' => $attendee->lastName,
+                        'email' => $attendee->email,
+                        'phoneNumber' => $attendee->phoneNumber,
+                        'password' => Hash::make($plainPassword),
+
+                        /*
+                         * Keep the legacy role column populated
+                         * during the transition to user_roles.
+                         */
+                        'role' => $participantRole->roleId,
+
+                        'status' => 'active',
+                    ]);
+
+                } else {
+
+                    /*
+                     * Existing user.
+                     *
+                     * IMPORTANT:
+                     * Do not overwrite their existing role.
+                     *
+                     * They could already be:
+                     *
+                     * participant + author
+                     * participant + reviewer
+                     * admin + author
+                     * etc.
+                     */
+                    $user = $existingUser;
+                }
+
+                /*
+                 * -----------------------------------------------------
+                 * 3. Add participant role to user_roles
+                 * -----------------------------------------------------
+                 *
+                 * syncWithoutDetaching() adds the participant role
+                 * if it doesn't exist, but preserves every other role.
+                 *
+                 * Examples:
+                 *
+                 * Existing:
+                 *   author
+                 *
+                 * After registration:
+                 *   author
+                 *   participant
+                 *
+                 * Existing:
+                 *   participant
+                 *
+                 * After registration:
+                 *   participant
+                 *
+                 * Existing:
+                 *   admin
+                 *   author
+                 *
+                 * After registration:
+                 *   admin
+                 *   author
+                 *   participant
+                 */
+                $user->roles()->syncWithoutDetaching([
+                    $participantRole->roleId,
+                ]);
+
+                /*
+                 * Link user back to attendee.
+                 */
+                $attendee->update([
+                    'userId' => $user->id,
+                ]);
+            }
+
+            /*
+             * ---------------------------------------------------------
+             * 4. Generate event pass
+             * ---------------------------------------------------------
+             */
+            $pass = EventPass::create([
+                'eventId' => $activeEvent->eventId,
+                'attendeeId' => $attendee->getKey(),
+                'passCode' => bin2hex(random_bytes(16)),
+                'serialNumber' => $this->generateSerialNumber($activeEvent),
+                'status' => 'active',
+            ]);
+
+            /*
+             * Generate QR code.
+             */
+            $this->qrCodeService->generateForEventPass($pass);
+
+            $pass = $pass->fresh();
+
+            /*
+             * Generate PDF.
+             */
+            $pdfContent = $this->passPdfService->generate(
+                $attendee,
+                $pass
+            );
+
+            /*
+             * Send pass and credentials.
+             */
+            if (!empty($attendee->email)) {
+                Mail::to($attendee->email)
+                    ->send(
+                        new AttendeePassMail(
+                            $attendee,
+                            $pass,
+                            $pdfContent,
+                            $plainPassword
+                        )
+                    );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                    'Attendee registered successfully.' .
+                    (
+                        empty($attendee->email)
+                            ? ''
+                            : ' Pass and login credentials sent to email.'
+                    ),
+                'data' => $attendee->load([
+                    'pass',
+                    'user',
+                ]),
+            ], 201);
+        });
     }
 
-    return DB::transaction(function () use ($attendee) {
-        if ($attendee->photo && Storage::disk('public')->exists($attendee->photo)) {
-            Storage::disk('public')->delete($attendee->photo);
+    public function resendPass(Attendee $attendee): JsonResponse
+    {
+        if (empty($attendee->email)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This participant has no email address on record.',
+            ], 422);
         }
 
-        $attendee->update(['photo' => null]);
+        $pass = $attendee->pass;
+
+        if (!$pass) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No pass found for this participant.',
+            ], 404);
+        }
+
+        /*
+         * Regenerate QR.
+         */
+        $this->qrCodeService->generateForEventPass($pass);
+
+        $pass->refresh();
+
+        /*
+         * Regenerate PDF.
+         */
+        $pdfContent = $this->passPdfService->generate(
+            $attendee,
+            $pass
+        );
+
+        Mail::to($attendee->email)
+            ->send(
+                new AttendeePassMail(
+                    $attendee,
+                    $pass,
+                    $pdfContent
+                )
+            );
 
         return response()->json([
             'success' => true,
-            'message' => 'Photo deleted successfully.',
-            'data' => $attendee->fresh(),
+            'message' => 'Pass resent successfully to ' . $attendee->email,
         ]);
-    });
-}
+    }
 
-protected function generateUniqueId(): string
-{
-    $datePart = now()->format('Ymd');
-    $countToday = Attendee::whereDate('created_at', now()->toDateString())->count() + 1;
-    return 'ICW-' . $datePart . '-' . str_pad((string) $countToday, 4, '0', STR_PAD_LEFT);
-}
+    private function generateSerialNumber(Event $event): string
+    {
+        $count = $event->passes()->count();
+
+        return strtoupper(
+            'ICW-' .
+            str_pad(
+                (string) ($count + 1),
+                4,
+                '0',
+                STR_PAD_LEFT
+            )
+        );
+    }
+
+    public function update(Request $request): JsonResponse
+    {
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'firstName' => ['required', 'string'],
+            'lastName' => ['required', 'string'],
+            'otherNames' => ['nullable', 'string'],
+            'email' => ['nullable', 'string'],
+            'phoneNumber' => ['nullable', 'string'],
+            'gender' => ['nullable', 'string'],
+            'maritalStatus' => ['nullable', 'string'],
+            'organizationName' => ['nullable', 'string'],
+            'stateOfResidence' => ['nullable', 'string'],
+
+            'category' => [
+                'required',
+                Rule::in([
+                    'healthcare_professional',
+                    'cancer_survivor',
+                    'development_partner',
+                    'student',
+                    'researcher',
+                    'general_public',
+                    'government_official',
+                    'other',
+                ]),
+            ],
+
+            'participationType' => [
+                'required',
+                Rule::in(['Physical', 'Virtual']),
+            ],
+
+            'photo' => [
+                'nullable',
+                'image',
+                'mimes:jpeg,png,jpg',
+                'max:2048',
+            ],
+        ]);
+
+        $attendee = Attendee::where(
+            'attendeeId',
+            $request->attendeeId
+        )->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attendee not found.',
+            ], 404);
+        }
+
+        return DB::transaction(function () use (
+            $validated,
+            $attendee,
+            $request
+        ) {
+            $updateData = $validated;
+
+            unset($updateData['attendeeId']);
+
+            /*
+             * Handle photo upload.
+             */
+            if ($request->hasFile('photo')) {
+
+                if (
+                    $attendee->photoUrl &&
+                    Storage::disk('public')->exists(
+                        $attendee->photoUrl
+                    )
+                ) {
+                    Storage::disk('public')->delete(
+                        $attendee->photoUrl
+                    );
+                }
+
+                $photo = $request->file('photo');
+
+                $filename =
+                    time() .
+                    '_' .
+                    uniqid() .
+                    '.' .
+                    $photo->getClientOriginalExtension();
+
+                $path = $photo->storeAs(
+                    'attendee_photos',
+                    $filename,
+                    'public'
+                );
+
+                $updateData['photoUrl'] = $path;
+            }
+
+            $attendee->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Registration updated successfully.',
+                'data' => $attendee->fresh(),
+            ]);
+        });
+    }
+
+    public function deletePhoto(Request $request): JsonResponse
+    {
+        $request->validate([
+            'attendeeId' => [
+                'required',
+                'exists:attendees,attendeeId',
+            ],
+        ]);
+
+        $attendee = Attendee::where(
+            'attendeeId',
+            $request->attendeeId
+        )->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attendee not found.',
+            ], 404);
+        }
+
+        return DB::transaction(function () use ($attendee) {
+
+            if (
+                $attendee->photoUrl &&
+                Storage::disk('public')->exists(
+                    $attendee->photoUrl
+                )
+            ) {
+                Storage::disk('public')->delete(
+                    $attendee->photoUrl
+                );
+            }
+
+            $attendee->update([
+                'photoUrl' => null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Photo deleted successfully.',
+                'data' => $attendee->fresh(),
+            ]);
+        });
+    }
+
+    protected function generateUniqueId(): string
+    {
+        $datePart = now()->format('Ymd');
+
+        $countToday =
+            Attendee::whereDate(
+                'created_at',
+                now()->toDateString()
+            )->count() + 1;
+
+        return 'ICW-' .
+            $datePart .
+            '-' .
+            str_pad(
+                (string) $countToday,
+                4,
+                '0',
+                STR_PAD_LEFT
+            );
+    }
 }

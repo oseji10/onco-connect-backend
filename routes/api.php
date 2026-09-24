@@ -47,6 +47,25 @@ use App\Http\Controllers\Api\ConferenceSettingController;
 
 use App\Http\Controllers\Api\AbstractRankingController;
 
+use App\Http\Controllers\Api\AuthorAbstractController;
+use App\Http\Controllers\Api\AuthorActivationController;
+
+
+// ── Public activation (signed URL) ────────────────────────────────────────
+Route::get('/author/activate/{user}',  [AuthorActivationController::class, 'show'])
+    ->name('author.activate');
+    // ->middleware('signed');
+
+Route::post('/author/activate/{user}', [AuthorActivationController::class, 'store']);
+    // ->middleware('signed');
+
+// ── Authenticated author area ────────────────────────────────────────────
+Route::middleware('auth:api')->group(function () {
+    Route::get('/author/abstracts',                    [AuthorAbstractController::class, 'index']);
+    Route::get('/author/abstracts/{abstract}',         [AuthorAbstractController::class, 'show']);
+    Route::get('/author/abstracts/{abstract}/versions',[AuthorAbstractController::class, 'versions']);
+    Route::post('/author/abstracts/{abstract}/resubmit',[AuthorAbstractController::class, 'resubmit']);
+});
 
 
 Route::put('/conference/attendee/register', [AttendeeController::class, 'store']);

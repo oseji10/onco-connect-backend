@@ -1,4 +1,5 @@
 <?php
+// app/Models/ReviewAssignment.php
 
 namespace App\Models;
 
@@ -16,10 +17,13 @@ class ReviewAssignment extends Model
         'reviewer_id',
         'status',
         'assigned_at',
+        'is_resubmission_review',
+        'source_assignment_id',
     ];
 
     protected $casts = [
         'assigned_at' => 'datetime',
+        'is_resubmission_review' => 'boolean',
     ];
 
     public function abstract(): BelongsTo
@@ -35,5 +39,10 @@ class ReviewAssignment extends Model
     public function review(): HasOne
     {
         return $this->hasOne(Review::class);
+    }
+
+    public function sourceAssignment(): BelongsTo
+    {
+        return $this->belongsTo(ReviewAssignment::class, 'source_assignment_id');
     }
 }

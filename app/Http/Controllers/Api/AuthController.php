@@ -24,11 +24,37 @@ class AuthController extends Controller
 
     public function me(): JsonResponse
     {
-        $user = Auth::guard('api')->user()?->load('facility');
+        // $user = Auth::guard('api')->user()?->load('facility');
 
-        return response()->json([
-            'user' => $user,
-        ]);
+        // return response()->json([
+        //     'user' => $user,
+        // ]);
+
+        $user = auth()->user()->load('roles');
+
+return response()->json([
+    'user' => [
+        'id' => $user->id,
+        'firstName' => $user->firstName,
+        'lastName' => $user->lastName,
+        'otherNames' => $user->otherNames,
+        'email' => $user->email,
+        'phoneNumber' => $user->phoneNumber,
+        'alternatePhoneNumber' => $user->alternatePhoneNumber,
+        'email_verified_at' => $user->email_verified_at,
+        'activated_at' => $user->activated_at,
+        'roles' => $user->roles->pluck('roleName')->values()->all(),
+        'facilityId' => $user->facilityId,
+        'status' => $user->status,
+        'must_change_password' => $user->must_change_password,
+        'otp_expires_at' => $user->otp_expires_at,
+        'created_at' => $user->created_at,
+        'updated_at' => $user->updated_at,
+        'photo' => $user->photo,
+        'portfolio' => $user->portfolio,
+        'facility' => $user->facility,
+    ],
+]);
     }
 
     public function refresh(): JsonResponse

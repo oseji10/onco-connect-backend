@@ -25,26 +25,77 @@ class ReviewController extends Controller
      * reviewer's own assignment, so the frontend's `reviewers[0]` is always
      * "my assignment", never someone else's.
      */
-    public function assigned(Request $request): JsonResponse
-    {
-        $reviewer = $this->resolveReviewer($request);
+    // public function assigned(Request $request): JsonResponse
+    // {
+    //     $reviewer = $this->resolveReviewer($request);
 
-        $abstracts = AbstractSubmission::query()
-            ->whereHas('assignments', fn ($q) => $q->where('reviewer_id', $reviewer->id))
-            ->with(['assignments' => function ($q) use ($reviewer) {
-                $q->where('reviewer_id', $reviewer->id)->with(['reviewer', 'review']);
-            }])
-            ->latest('submitted_at')
-            ->get();
+    //     $abstracts = AbstractSubmission::query()
+    //         ->whereHas('assignments', fn ($q) => $q->where('reviewer_id', $reviewer->id))
+    //         ->with(['assignments' => function ($q) use ($reviewer) {
+    //             $q->where('reviewer_id', $reviewer->id)->with(['reviewer', 'review']);
+    //         }])
+    //         ->latest('submitted_at')
+    //         ->get();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Assigned abstracts retrieved.',
-            'data' => [
-                'items' => AbstractResource::collection($abstracts),
-            ],
-        ]);
-    }
+    //     return response()->json([
+    //         'success' => true,
+    //         'message' => 'Assigned abstracts retrieved.',
+    //         'data' => [
+    //             'items' => AbstractResource::collection($abstracts),
+    //         ],
+    //     ]);
+    // }
+
+
+
+public function assigned(Request $request): JsonResponse
+{
+    $reviewerId = auth('api')->user()->reviewer?->id ?? $request->user()->id;
+
+    $assignments = \App\Models\ReviewAssignment::query()
+        ->where('reviewer_id', $reviewerId)
+        ->with([
+            'abstract.authors',
+            'abstract.parent',
+            'review',
+            'sourceAssignment.review',
+        ])
+        ->latest('assigned_at')
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $assignments->map(function ($a) {
+            return [
+                'assignment_id' => $a->id,
+                'status' => $a->status,
+                'assigned_at' => $a->assigned_at?->toIso8601String(),
+                'is_resubmission_review' => $a->is_resubmission_review,
+                'abstract' => [
+                    'id' => $a->abstract->id,
+                    'reference' => $a->abstract->reference,
+                    'title' => $a->abstract->title,
+                    'body' => $a->abstract->body,
+                    'sub_theme' => $a->abstract->sub_theme,
+                    'version' => $a->abstract->version,
+                    'is_current' => $a->abstract->is_current,
+                    'resubmission_note' => $a->abstract->resubmission_note,
+                ],
+                'review' => $a->review,
+                // Previous review on the original version (for context)
+                'previous_review' => $a->sourceAssignment?->review ? [
+                    'significance' => $a->sourceAssignment->review->significance,
+                    'relevance' => $a->sourceAssignment->review->relevance,
+                    'originality' => $a->sourceAssignment->review->originality,
+                    'average' => (float) $a->sourceAssignment->review->average,
+                    'comment' => $a->sourceAssignment->review->comment,
+                    'submitted_at' => $a->sourceAssignment->review->submitted_at?->toIso8601String(),
+                    'original_reference' => $a->sourceAssignment->abstract->reference,
+                ] : null,
+            ];
+        }),
+    ]);
+}
 
     /**
      * POST /api/abstracts/{abstract}/review
