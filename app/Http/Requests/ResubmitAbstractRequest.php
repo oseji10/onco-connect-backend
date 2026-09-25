@@ -56,9 +56,19 @@ class ResubmitAbstractRequest extends FormRequest
                 'min:1',
             ],
 
+            /*
+             * Author IDs come straight back from the API as JSON numbers
+             * (the AbstractAuthor primary key), not strings. A `string`
+             * rule rejects a decoded JSON number outright, so any
+             * resubmission that echoed back existing author IDs would
+             * fail validation with a 422 and never create the new
+             * version — no error the author would necessarily notice
+             * as "the resubmission didn't go through". Dropping the
+             * type constraint here (the controller only uses this to
+             * look up the original author row) fixes that.
+             */
             'authors.*.id' => [
                 'nullable',
-                'string',
             ],
 
             'authors.*.name' => [

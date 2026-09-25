@@ -75,24 +75,28 @@ class AbstractSubmissionController extends Controller
             ->setStatusCode(201);
     }
 
-    // private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
-    // {
-    //     $author = $abstract->correspondingAuthor();
-    //     if (! $author || ! $author->email) {
-    //         return;
-    //     }
-
-    //     Notification::route('mail', $author->email)
-    //         ->notify(new AbstractSubmittedNotification($abstract));
-    // }
-
     /**
      * GET /api/abstracts
      * Admin — list with search/filter/pagination.
+     *
+     * IMPORTANT: only the CURRENT version of each abstract is returned.
+     * When an author resubmits, the previous version is frozen
+     * (is_current = false) and a new row is created (is_current = true).
+     * Without this filter, every resubmitted abstract would show up
+     * TWICE in the admin table — once as a stale, frozen original and
+     * once as the live resubmission — which is what was making
+     * resubmissions appear to "go missing" among duplicate rows.
+     * Every other reader of this table (author dashboard, reviewer
+     * dashboard) already filters this way; this brings the admin
+     * listing in line with them. The version badge / "Resubmitted
+     * only" toggle / version-history modal on the frontend still work
+     * exactly as before, since the current row still carries the
+     * correct version number.
      */
     public function index(Request $request): JsonResponse
     {
         $query = AbstractSubmission::query()
+            ->where('is_current', true)
             ->with(['authors', 'assignments.reviewer', 'assignments.review'])
             ->latest('submitted_at');
 
@@ -165,114 +169,91 @@ class AbstractSubmissionController extends Controller
         ]);
     }
 
-    // private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
-    // {
-    //     $author = $abstract->correspondingAuthor();
-    //     if (! $author || ! $author->email) {
-    //         return;
-    //     }
+    private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
+    {
+        $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
 
-    //     Notification::route('mail', $author->email)
-    //         ->notify(new AbstractDecisionNotification($abstract));
-    // }
+        if (! $author || ! $author->email) {
+            return;
+        }
 
-    
+        Notification::route('mail', [$author->email => $author->name])->notify(
+            new AbstractDecisionNotification(
+                $abstract,
+                $abstract->status,               // 'accepted' | 'rejected'
+                $abstract->presentation_type,    // 'oral' | 'poster' | null
+                $abstract->overall_rank,
+                $abstract->sub_theme,
+                $abstract->sub_theme_rank,
+                $author->name
+            )
+        );
 
-private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
-{
-    $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
- 
-    if (! $author || ! $author->email) {
-        return;
+        $abstract->forceFill(['decision_notified_at' => now()])->save();
     }
- 
-    Notification::route('mail', [$author->email => $author->name])->notify(
-        new AbstractDecisionNotification(
-            $abstract,
-            $abstract->status,               // 'accepted' | 'rejected'
-            $abstract->presentation_type,    // 'oral' | 'poster' | null
-            $abstract->overall_rank,
-            $abstract->sub_theme,
-            $abstract->sub_theme_rank,
-            $author->name
-        )
-    );
- 
-    $abstract->forceFill(['decision_notified_at' => now()])->save();
-}
- 
 
+    /**
+     * GET /api/abstracts/{abstract}/versions
+     *
+     * Returns the entire version chain for the given abstract (itself + every
+     * resubmission), oldest first. Works whether the given id is the original
+     * abstract or a later resubmission.
+     */
+    public function versions(AbstractSubmission $abstract): JsonResponse
+    {
+        // Resolve the root of the chain (the original submission)
+        $rootId = $abstract->parent_id ? $abstract->root()->id : $abstract->id;
 
+        $versions = AbstractSubmission::where('id', $rootId)
+            ->orWhere('parent_id', $rootId)
+            ->orderBy('version')
+            ->with(['authors', 'assignments.review', 'assignments.reviewer'])
+            ->get();
 
-
-/**
- * GET /api/abstracts/{abstract}/versions
- *
- * Returns the entire version chain for the given abstract (itself + every
- * resubmission), oldest first. Works whether the given id is the original
- * abstract or a later resubmission.
- */
-public function versions(AbstractSubmission $abstract): JsonResponse
-{
-    // Resolve the root of the chain (the original submission)
-    $rootId = $abstract->parent_id ? $abstract->root()->id : $abstract->id;
-
-    $versions = AbstractSubmission::where('id', $rootId)
-        ->orWhere('parent_id', $rootId)
-        ->orderBy('version')
-        ->with(['authors', 'assignments.review', 'assignments.reviewer'])
-        ->get();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Abstract versions retrieved.',
-        'data' => $versions->map(function (AbstractSubmission $v) {
-            return [
-                'id' => $v->id,
-                'reference' => $v->reference,
-                'version' => $v->version,
-                'is_current' => $v->is_current,
-                'status' => $v->status,
-                'title' => $v->title,
-                'body' => $v->body,
-                'keywords' => $v->keywords,
-                'sub_theme' => $v->sub_theme,
-                'presentation_type' => $v->presentation_type,
-                'resubmission_note' => $v->resubmission_note,
-                'submitted_at' => $v->submitted_at?->toIso8601String(),
-                'resubmitted_at' => $v->resubmitted_at?->toIso8601String(),
-                'reviews' => $v->assignments->map(fn ($a) => [
-                    'reviewer_name' => $a->reviewer?->name,
-                    'status' => $a->status,
-                    'is_resubmission_review' => $a->is_resubmission_review,
-                    'review' => $a->review ? [
-                        'significance' => $a->review->significance,
-                        'relevance' => $a->review->relevance,
-                        'originality' => $a->review->originality,
-                        'average' => (float) $a->review->average,
-                        'comment' => $a->review->comment,
-                        'submitted_at' => $a->review->submitted_at?->toIso8601String(),
-                    ] : null,
-                ])->values(),
-            ];
-        }),
-    ]);
-}
-
-
-/**
- * Also apply the same ->first() fix inside notifyAuthorOfSubmission()
- * a few lines above it, for the same reason:
- */
- 
-private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
-{
-    $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
-    if (! $author || ! $author->email) {
-        return;
+        return response()->json([
+            'success' => true,
+            'message' => 'Abstract versions retrieved.',
+            'data' => $versions->map(function (AbstractSubmission $v) {
+                return [
+                    'id' => $v->id,
+                    'reference' => $v->reference,
+                    'version' => $v->version,
+                    'is_current' => $v->is_current,
+                    'status' => $v->status,
+                    'title' => $v->title,
+                    'body' => $v->body,
+                    'keywords' => $v->keywords,
+                    'sub_theme' => $v->sub_theme,
+                    'presentation_type' => $v->presentation_type,
+                    'resubmission_note' => $v->resubmission_note,
+                    'submitted_at' => $v->submitted_at?->toIso8601String(),
+                    'resubmitted_at' => $v->resubmitted_at?->toIso8601String(),
+                    'reviews' => $v->assignments->map(fn ($a) => [
+                        'reviewer_name' => $a->reviewer?->name,
+                        'status' => $a->status,
+                        'is_resubmission_review' => $a->is_resubmission_review,
+                        'review' => $a->review ? [
+                            'significance' => $a->review->significance,
+                            'relevance' => $a->review->relevance,
+                            'originality' => $a->review->originality,
+                            'average' => (float) $a->review->average,
+                            'comment' => $a->review->comment,
+                            'submitted_at' => $a->review->submitted_at?->toIso8601String(),
+                        ] : null,
+                    ])->values(),
+                ];
+            }),
+        ]);
     }
- 
-    Notification::route('mail', $author->email)
-        ->notify(new AbstractSubmittedNotification($abstract));
-}
+
+    private function notifyAuthorOfSubmission(AbstractSubmission $abstract): void
+    {
+        $author = $abstract->correspondingAuthor()->first() ?? $abstract->authors()->first();
+        if (! $author || ! $author->email) {
+            return;
+        }
+
+        Notification::route('mail', $author->email)
+            ->notify(new AbstractSubmittedNotification($abstract));
+    }
 }
