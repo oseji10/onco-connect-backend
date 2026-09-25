@@ -171,20 +171,45 @@ Route::post('/abstracts/notifications/custom', [AbstractRankingController::class
     Route::patch('/speakers/{speaker}/status', [SpeakerController::class, 'updateStatus']);
 
 
+// Route::prefix('abstracts')->group(function () {
+
+//     // Abstracts
+//     Route::get('/', [AbstractSubmissionController::class, 'index']);
+
+//     // Reviewer management (static routes first)
+//     Route::post('/reviewers/invite', [ReviewerController::class, 'invite']);
+//     Route::get('/reviewers', [ReviewerController::class, 'index']);
+//     Route::post('/reviewers/{reviewer}/resend-invite', [ReviewerController::class, 'resendInvite']);
+
+//     // Reviewer actions
+//     Route::get('/reviews/assigned', [ReviewController::class, 'assigned']);
+
+//     // Abstract-specific routes (wildcards last)
+//     Route::get('/{abstract}/versions', [AbstractSubmissionController::class, 'versions']);
+//     Route::get('/{abstract}', [AbstractSubmissionController::class, 'show']);
+//     Route::patch('/{abstract}/status', [AbstractSubmissionController::class, 'updateStatus']);
+//     Route::post('/{abstract}/assign-reviewers', [ReviewAssignmentController::class, 'store']);
+//     Route::post('/{abstract}/review', [ReviewController::class, 'store']);
+// });
+
+
 Route::prefix('abstracts')->group(function () {
 
-    // Abstracts
+    // ── Abstracts list ────────────────────────────────────────────────
     Route::get('/', [AbstractSubmissionController::class, 'index']);
 
-    // Reviewer management (static routes first)
+    // ── Reviewer management (static routes first) ─────────────────────
     Route::post('/reviewers/invite', [ReviewerController::class, 'invite']);
     Route::get('/reviewers', [ReviewerController::class, 'index']);
     Route::post('/reviewers/{reviewer}/resend-invite', [ReviewerController::class, 'resendInvite']);
 
-    // Reviewer actions
+    // ── Reviewer actions ──────────────────────────────────────────────
     Route::get('/reviews/assigned', [ReviewController::class, 'assigned']);
 
-    // Abstract-specific routes (wildcards last)
+    // ── Version history (MUST come before /{abstract}) ────────────────
+    Route::get('/{abstract}/versions', [AbstractSubmissionController::class, 'versions']);
+
+    // ── Abstract-specific routes (wildcards last) ─────────────────────
     Route::get('/{abstract}', [AbstractSubmissionController::class, 'show']);
     Route::patch('/{abstract}/status', [AbstractSubmissionController::class, 'updateStatus']);
     Route::post('/{abstract}/assign-reviewers', [ReviewAssignmentController::class, 'store']);

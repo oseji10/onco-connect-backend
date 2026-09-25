@@ -201,6 +201,65 @@ private function notifyAuthorOfDecision(AbstractSubmission $abstract): void
     $abstract->forceFill(['decision_notified_at' => now()])->save();
 }
  
+
+
+
+
+/**
+ * GET /api/abstracts/{abstract}/versions
+ *
+ * Returns the entire version chain for the given abstract (itself + every
+ * resubmission), oldest first. Works whether the given id is the original
+ * abstract or a later resubmission.
+ */
+public function versions(AbstractSubmission $abstract): JsonResponse
+{
+    // Resolve the root of the chain (the original submission)
+    $rootId = $abstract->parent_id ? $abstract->root()->id : $abstract->id;
+
+    $versions = AbstractSubmission::where('id', $rootId)
+        ->orWhere('parent_id', $rootId)
+        ->orderBy('version')
+        ->with(['authors', 'assignments.review', 'assignments.reviewer'])
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Abstract versions retrieved.',
+        'data' => $versions->map(function (AbstractSubmission $v) {
+            return [
+                'id' => $v->id,
+                'reference' => $v->reference,
+                'version' => $v->version,
+                'is_current' => $v->is_current,
+                'status' => $v->status,
+                'title' => $v->title,
+                'body' => $v->body,
+                'keywords' => $v->keywords,
+                'sub_theme' => $v->sub_theme,
+                'presentation_type' => $v->presentation_type,
+                'resubmission_note' => $v->resubmission_note,
+                'submitted_at' => $v->submitted_at?->toIso8601String(),
+                'resubmitted_at' => $v->resubmitted_at?->toIso8601String(),
+                'reviews' => $v->assignments->map(fn ($a) => [
+                    'reviewer_name' => $a->reviewer?->name,
+                    'status' => $a->status,
+                    'is_resubmission_review' => $a->is_resubmission_review,
+                    'review' => $a->review ? [
+                        'significance' => $a->review->significance,
+                        'relevance' => $a->review->relevance,
+                        'originality' => $a->review->originality,
+                        'average' => (float) $a->review->average,
+                        'comment' => $a->review->comment,
+                        'submitted_at' => $a->review->submitted_at?->toIso8601String(),
+                    ] : null,
+                ])->values(),
+            ];
+        }),
+    ]);
+}
+
+
 /**
  * Also apply the same ->first() fix inside notifyAuthorOfSubmission()
  * a few lines above it, for the same reason:
