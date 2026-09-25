@@ -79,19 +79,16 @@ class AbstractSubmissionController extends Controller
      * GET /api/abstracts
      * Admin — list with search/filter/pagination.
      *
-     * IMPORTANT: only the CURRENT version of each abstract is returned.
-     * When an author resubmits, the previous version is frozen
-     * (is_current = false) and a new row is created (is_current = true).
-     * Without this filter, every resubmitted abstract would show up
-     * TWICE in the admin table — once as a stale, frozen original and
-     * once as the live resubmission — which is what was making
-     * resubmissions appear to "go missing" among duplicate rows.
-     * Every other reader of this table (author dashboard, reviewer
-     * dashboard) already filters this way; this brings the admin
-     * listing in line with them. The version badge / "Resubmitted
-     * only" toggle / version-history modal on the frontend still work
-     * exactly as before, since the current row still carries the
-     * correct version number.
+     * Only the CURRENT version of each abstract is returned (see the
+     * is_current filter below) — see the note further down for why.
+     *
+     * Optional `resubmittedOnly=1` query param restricts results to
+     * abstracts that are on version 2+ of their current (live) row,
+     * i.e. abstracts that have actually been resubmitted at least
+     * once. This is applied server-side, before pagination, so the
+     * "Resubmitted only" toggle on the frontend gets an accurate
+     * total and can page through ALL matching abstracts — not just
+     * whichever ones happen to fall on the currently loaded page.
      */
     public function index(Request $request): JsonResponse
     {
@@ -106,6 +103,10 @@ class AbstractSubmissionController extends Controller
 
         if ($subTheme = $request->query('subTheme')) {
             $query->where('sub_theme', $subTheme);
+        }
+
+        if ($request->boolean('resubmittedOnly')) {
+            $query->where('version', '>', 1);
         }
 
         if ($search = $request->query('search')) {
