@@ -10,6 +10,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+
+use App\Models\ReviewAssignment;
+
 class AbstractRankingController extends Controller
 {
     public function __construct(private readonly AbstractRankingService $rankingService)
@@ -259,4 +262,186 @@ class AbstractRankingController extends Controller
             ],
         ];
     }
+
+
+
+
+
+
+/**
+ * GET /api/reviewer/rankings
+ *
+ * Returns rankings for abstracts the authenticated reviewer has been
+ * assigned. Two views are returned:
+ *   - overall: all of their reviewed abstracts ranked by average_score
+ *   - sub_themes: the same abstracts grouped by sub-theme
+ */
+public function reviewerRankings(Request $request): JsonResponse
+{
+    $user = $request->user();
+    if (! $user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthenticated.',
+        ], 401);
+    }
+
+    // The reviewer record linked to this user. Adjust if your Reviewer
+    // model is linked differently (e.g. by email).
+    $reviewer = \App\Models\Reviewer::where('user_id', $user->id)->first()
+        ?? \App\Models\Reviewer::where('email', $user->email)->first();
+
+    if (! $reviewer) {
+        return response()->json([
+            'success' => true,
+            'message' => 'No reviewer profile linked to this account.',
+            'data' => [
+                'overall' => [],
+                'sub_themes' => (object) [],
+            ],
+        ]);
+    }
+
+    // The abstract ids this reviewer has ever been assigned to.
+    $abstractIds = ReviewAssignment::where('reviewer_id', $reviewer->id)
+        ->pluck('abstract_id')
+        ->unique()
+        ->values()
+        ->all();
+
+    if (empty($abstractIds)) {
+        return response()->json([
+            'success' => true,
+            'message' => 'No abstracts assigned.',
+            'data' => [
+                'overall' => [],
+                'sub_themes' => (object) [],
+            ],
+        ]);
+    }
+
+    // Only current versions of those abstracts.
+    $abstracts = AbstractSubmission::query()
+        ->whereIn('id', $abstractIds)
+        ->where('is_current', true)
+        ->with(['authors', 'assignments.review'])
+        ->get();
+
+    // Build the review_count + average_score per abstract.
+    $rows = $abstracts->map(function (AbstractSubmission $a) {
+        $submittedReviews = $a->assignments
+            ->pluck('review')
+            ->filter();
+
+        $average = $submittedReviews->isNotEmpty()
+            ? round($submittedReviews->pluck('average')->avg(), 2)
+            : null;
+
+        return [
+            'id' => $a->id,
+            'reference' => $a->reference,
+            'title' => $a->title,
+            'sub_theme' => $a->sub_theme,
+            'average_score' => $average ?? 0,
+            'status' => $a->status,
+            'presentation_type' => $a->presentation_type,
+            'review_count' => $submittedReviews->count(),
+            'authors' => $a->authors->map(fn ($au) => [
+                'id' => $au->id,
+                'name' => $au->name,
+                'email' => $au->email,
+                'affiliation' => $au->affiliation,
+                'is_corresponding' => (bool) $au->is_corresponding,
+            ])->values(),
+        ];
+    })
+    ->sortByDesc('average_score')
+    ->values();
+
+    // Overall ranking
+    $overall = $rows->map(function ($row, $index) {
+        return [
+            'rank' => $index + 1,
+            'abstract' => [
+                'id' => $row['id'],
+                'reference' => $row['reference'],
+                'title' => $row['title'],
+                'sub_theme' => $row['sub_theme'],
+                'average_score' => $row['average_score'],
+                'status' => $row['status'],
+                'presentation_type' => $row['presentation_type'],
+                'authors' => $row['authors'],
+            ],
+            'average_score' => $row['average_score'],
+            'review_count' => $row['review_count'],
+            'sub_theme' => $row['sub_theme'],
+        ];
+    })->all();
+
+    // Group by sub-theme, each group ranked independently
+    $subThemes = $rows
+        ->groupBy('sub_theme')
+        ->map(function ($group) {
+            return $group
+                ->values()
+                ->map(function ($row, $index) {
+                    return [
+                        'rank' => $index + 1,
+                        'abstract' => [
+                            'id' => $row['id'],
+                            'reference' => $row['reference'],
+                            'title' => $row['title'],
+                            'sub_theme' => $row['sub_theme'],
+                            'average_score' => $row['average_score'],
+                            'status' => $row['status'],
+                            'presentation_type' => $row['presentation_type'],
+                            'authors' => $row['authors'],
+                        ],
+                        'average_score' => $row['average_score'],
+                        'review_count' => $row['review_count'],
+                        'sub_theme' => $row['sub_theme'],
+                    ];
+                })
+                ->all();
+        })
+        ->toArray();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Reviewer rankings retrieved.',
+        'data' => [
+            'overall' => $overall,
+            'sub_themes' => $subThemes,
+        ],
+    ]);
+}
+
+/**
+ * GET /api/reviewer/rankings/export
+ *
+ * Optional CSV export of the same data.
+ */
+public function export(Request $request)
+{
+    // If you don't need this yet, return a 501 to avoid another missing-method error.
+    return response()->json([
+        'success' => false,
+        'message' => 'Export not implemented yet.',
+    ], 501);
+}
+
+/**
+ * GET /api/reviewer/rankings/statistics
+ *
+ * Optional summary stats. Same treatment as above.
+ */
+public function reviewerStatistics(Request $request)
+{
+    return response()->json([
+        'success' => false,
+        'message' => 'Statistics not implemented yet.',
+    ], 501);
+}
+
+
 }
