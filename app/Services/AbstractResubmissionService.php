@@ -151,7 +151,7 @@ class AbstractResubmissionService
                      * The reviewer has not started the new review.
                      */
                     'status' =>
-                        'pending',
+                        'in_progress',
 
                     'assigned_at' =>
                         now(),
