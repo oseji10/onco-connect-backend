@@ -83,6 +83,12 @@ class AbstractSubmission extends Model
         return $this->parent_id !== null;
     }
 
+    // AbstractSubmission.php
+public function scopeCurrent($query)
+{
+    return $query->where($this->getTable() . '.is_current', true);
+}
+
     /**
      * Return every version in the chain (oldest → newest), with reviews.
      */

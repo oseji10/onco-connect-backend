@@ -299,20 +299,23 @@ class IssamCentralDashboardController extends Controller
     {
         // NOTE: adjust these column keys if your AbstractSubmission schema
         // uses different field names for the author/title.
-        $rows = AbstractSubmission::with('authors')
-    ->orderByDesc('created_at')
-    ->get()
-    ->map(function ($row) {
-        $author = $row->correspondingAuthor();
+        $rows = AbstractSubmission::current()
+        ->with('authors')
+        ->orderByDesc('submitted_at')
+        ->get()
+        ->map(function ($row) {
+            $author = $row->correspondingAuthor()->first() ?? $row->authors->first();
 
-        return [
-            'reference' => $row->reference,
-            'title' => $row->title ?? '-',
-            'correspondingAuthor' => $author?->name ?? '-',
-            'presentationType' => $row->presentation_type ?? '-',
-            'status' => $row->status,
-            'submittedAt' => optional($row->created_at)->format('d M Y') ?? '-',
-        ];
+            return [
+                'reference'           => $row->reference,
+                'title'               => $row->title ?? '-',
+                'correspondingAuthor' => $author?->name ?? '-',
+                'presentationType'    => $row->presentation_type ?? '-',
+                'status'              => $row->status,
+                'version'             => $row->version,
+                'submittedAt'         => optional($row->submitted_at)->format('d M Y') ?? '-',
+            ];
+        
     });
     
         return response()->json([
