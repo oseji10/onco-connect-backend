@@ -136,19 +136,43 @@ class DashboardController extends Controller
         // global counts rather than scoped to $eventId like everything else
         // on this dashboard. If you later run multiple events/years through
         // this same abstracts table, this will need a scope added.
-        $abstractsSubmitted = AbstractSubmission::count();
+        // $abstractsSubmitted = AbstractSubmission::count();
 
-        $abstractsAccepted = AbstractSubmission::where('status', 'accepted')->count();
+        // $abstractsAccepted = AbstractSubmission::where('status', 'accepted')->count();
 
-        $abstractsRejected = AbstractSubmission::where('status', 'rejected')->count();
+        // $abstractsRejected = AbstractSubmission::where('status', 'rejected')->count();
 
-        $posterCount = AbstractSubmission::where('status', 'accepted')
-            ->where('presentation_type', 'Poster')
-            ->count();
+        // $posterCount = AbstractSubmission::where('status', 'accepted')
+        //     ->where('presentation_type', 'Poster')
+        //     ->count();
 
-        $oralCount = AbstractSubmission::where('status', 'accepted')
-            ->where('presentation_type', 'Oral')
-            ->count();
+        // $oralCount = AbstractSubmission::where('status', 'accepted')
+        //     ->where('presentation_type', 'Oral')
+        //     ->count();
+
+        // Abstract submission metrics.
+// Only the CURRENT version of each abstract is counted, so a resubmitted
+// abstract is one abstract, not one per version. Same rule as
+// AbstractSubmissionController::index().
+$abstractsSubmitted = AbstractSubmission::current()->count();
+
+$abstractsAccepted = AbstractSubmission::current()
+    ->where('status', 'accepted')
+    ->count();
+
+$abstractsRejected = AbstractSubmission::current()
+    ->where('status', 'rejected')
+    ->count();
+
+$posterCount = AbstractSubmission::current()
+    ->where('status', 'accepted')
+    ->where('presentation_type', 'Poster')
+    ->count();
+
+$oralCount = AbstractSubmission::current()
+    ->where('status', 'accepted')
+    ->where('presentation_type', 'Oral')
+    ->count();
 
             
 
