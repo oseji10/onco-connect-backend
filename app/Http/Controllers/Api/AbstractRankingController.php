@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AbstractResource;
 use App\Models\AbstractSubmission;
+use App\Notifications\AbstractCustomNotification;
 use App\Services\AbstractRankingService;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 
@@ -172,17 +175,21 @@ class AbstractRankingController extends Controller
     }
 
     /**
-     * POST /api/abstracts/notifications/custom
-     * Send the same free-text subject/message either to an entire named
-     * category, or to a specific set of hand-picked abstracts. Exactly one
-     * of `category` / `abstractIds` must be supplied. This never changes
+     * POST /api/abstracts/notifications/custom   (multipart/form-data)
+     * Send the same free-text subject/message, with optional file
+     * attachments, either to an entire named category, or to a specific
+     * set of hand-picked abstracts. Exactly one of `category` /
+     * `abstractIds` must be supplied. This never changes
      * status/presentation_type and never touches decision_notified_at —
      * it's an ad-hoc message, not a decision.
      *
      * Body:
-     *   { category: 'oral'|'poster'|'pending'|'rejected'|'all', subject, message }
+     *   { category: 'oral'|'poster'|'pending'|'rejected'|'all', subject, message, attachments?: File[] }
      *   OR
-     *   { abstractIds: number[], subject, message }
+     *   { abstractIds: number[], subject, message, attachments?: File[] }
+     *
+     * Attachments: up to 5 files, 10 MB each (pdf, doc(x), xls(x), ppt(x),
+     * png, jpg/jpeg, zip).
      */
     public function sendCustom(Request $request): JsonResponse
     {
@@ -192,6 +199,12 @@ class AbstractRankingController extends Controller
             'abstractIds.*' => ['integer', 'exists:abstracts,id'],
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:10000'],
+            'attachments' => ['nullable', 'array', 'max:5'],
+            'attachments.*' => [
+                'file',
+                'max:10240', // KB
+                'mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg,zip',
+            ],
         ]);
 
         $hasCategory = ! empty($validated['category']);
@@ -215,11 +228,36 @@ class AbstractRankingController extends Controller
             ], 422);
         }
 
-        $result = $this->rankingService->sendCustomToAbstracts(
-            $abstracts,
-            $validated['subject'],
-            $validated['message']
-        );
+        // Persist uploads to disk first: the request's temp files vanish
+        // when the request ends, which would break queued mail.
+        $attachments = [];
+        foreach ($request->file('attachments', []) as $file) {
+            $attachments[] = [
+                'path' => $file->store('mail-attachments', 'local'),
+                'name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+            ];
+        }
+
+        // If the notification is queued, the worker reads the files after
+        // this request finishes, so they must NOT be deleted here — clear
+        // storage/app/mail-attachments with a scheduled command instead
+        // (e.g. files older than 7 days). If it's sent synchronously, we
+        // can clean up right away.
+        $isQueued = in_array(ShouldQueue::class, class_implements(AbstractCustomNotification::class) ?: [], true);
+
+        try {
+            $result = $this->rankingService->sendCustomToAbstracts(
+                $abstracts,
+                $validated['subject'],
+                $validated['message'],
+                $attachments
+            );
+        } finally {
+            if (! $isQueued && $attachments) {
+                Storage::disk('local')->delete(array_column($attachments, 'path'));
+            }
+        }
 
         $skippedNote = $result['skipped_no_email'] > 0
             ? ", {$result['skipped_no_email']} skipped (no author email on file)"

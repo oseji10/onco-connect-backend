@@ -212,17 +212,25 @@ class AbstractRankingService
     }
 
     /**
-     * Send the same free-text subject/message to a set of abstracts'
-     * corresponding authors. Used for both category broadcasts (e.g. every
-     * oral presenter) and ad-hoc selected-abstract sends. Unlike
-     * sendNotification(), this never touches status, presentation_type,
-     * or decision_notified_at — it's explicitly not a decision.
+     * Send the same free-text subject/message (plus optional file
+     * attachments) to a set of abstracts' corresponding authors. Used for
+     * both category broadcasts (e.g. every oral presenter) and ad-hoc
+     * selected-abstract sends. Unlike sendNotification(), this never
+     * touches status, presentation_type, or decision_notified_at — it's
+     * explicitly not a decision.
      *
      * @param  Collection<int, AbstractSubmission>  $abstracts
+     * @param  array<int, array{path:string, name:string, mime:?string}>  $attachments
+     *         Files already stored on the "local" disk (see the controller);
+     *         each one is attached to every outgoing email.
      * @return array{sent:int, skipped_no_email:int}
      */
-    public function sendCustomToAbstracts(Collection $abstracts, string $subject, string $body): array
-    {
+    public function sendCustomToAbstracts(
+        Collection $abstracts,
+        string $subject,
+        string $body,
+        array $attachments = []
+    ): array {
         $sent = 0;
         $skippedNoEmail = 0;
 
@@ -236,7 +244,7 @@ class AbstractRankingService
             }
 
             Notification::route('mail', [$author->email => $author->name])->notify(
-                new AbstractCustomNotification($abstract, $subject, $body, $author->name)
+                new AbstractCustomNotification($abstract, $subject, $body, $author->name, $attachments)
             );
 
             $sent++;
