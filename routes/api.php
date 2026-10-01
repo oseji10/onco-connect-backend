@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\AuthorActivationController;
 use App\Http\Controllers\Api\ParticipantAttendanceController;
 use App\Http\Controllers\Api\EligibilityController;
 
+use App\Http\Controllers\Api\PasswordResetController;
 
 
 // ── Public activation (signed URL) ────────────────────────────────────────
