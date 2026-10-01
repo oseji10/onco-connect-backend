@@ -56,6 +56,8 @@ class Attendee extends Model
         'accreditedAt' => 'datetime',
 
         'physicallyChallenged' => 'boolean',
+        'certificateEligible' => 'boolean', 
+        'manualOverride' => 'boolean'
     ];
 
     /**
@@ -199,6 +201,30 @@ public function certificates(): HasMany
 {
     return $this->hasMany(Certificate::class, 'attendeeId', 'attendeeId');
 }
+
+
+public function attendanceRecords() 
+{ 
+    return $this->hasMany(AttendanceRecord::class, 'attendeeId', 'attendeeId'); 
+}
+
+ public function feedback()          
+ { 
+    return $this->hasOne(EventFeedback::class, 'attendeeId', 'attendeeId'); 
+}
+
+
+/*
+ * ADD to App\Models\Attendee:
+ *
+ * protected $casts = [ ...existing..., 'certificateEligible' => 'boolean', 'manualOverride' => 'boolean' ];
+ *
+ * public function attendanceRecords() { return $this->hasMany(AttendanceRecord::class, 'attendeeId', 'attendeeId'); }
+ * public function feedback()          { return $this->hasOne(EventFeedback::class, 'attendeeId', 'attendeeId'); }
+ *
+ * Make sure the new columns are fillable OR keep using forceFill() as the service does.
+ */
+ 
 
 
 }

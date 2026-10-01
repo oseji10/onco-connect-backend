@@ -50,6 +50,10 @@ use App\Http\Controllers\Api\AbstractRankingController;
 use App\Http\Controllers\Api\AuthorAbstractController;
 use App\Http\Controllers\Api\AuthorActivationController;
 
+use App\Http\Controllers\Api\ParticipantAttendanceController;
+use App\Http\Controllers\Api\EligibilityController;
+
+
 
 // ── Public activation (signed URL) ────────────────────────────────────────
 Route::get('/author/activate/{user}',  [AuthorActivationController::class, 'show'])
@@ -84,6 +88,12 @@ Route::get('/conference-settings', [ConferenceSettingController::class, 'show'])
 
     Route::post('/auth/login-otp', [PasswordSetupController::class, 'loginWithOtp'])
     ->name('auth.login-otp');
+
+     Route::post('/auth/forgot-password', [PasswordResetController::class, 'forgot'])
+        ->middleware('throttle:5,1');   // 5 requests / minute / IP
+ 
+    Route::post('/auth/reset-password', [PasswordResetController::class, 'reset'])
+        ->middleware('throttle:10,1');  // 10 requests / minute / IP
  
 Route::middleware(['auth:api'])->group(function () {
     Route::post('/auth/change-password', [PasswordSetupController::class, 'changePassword'])
@@ -151,6 +161,16 @@ Route::patch('/conference-settings', [ConferenceSettingController::class, 'updat
 // Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
 // Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
 
+
+    // Participant (any logged-in participant)
+    Route::get('/participant/attendance', [ParticipantAttendanceController::class, 'show']);
+    Route::post('/participant/sessions/{session}/check-in', [ParticipantAttendanceController::class, 'checkIn']);
+    Route::post('/participant/feedback', [ParticipantAttendanceController::class, 'feedback']);
+
+    // Admin / organiser only -> add your role middleware here
+    Route::get('/accreditation/events/{eventId}/eligibility', [EligibilityController::class, 'index']);
+    Route::post('/accreditation/events/{eventId}/manual', [EligibilityController::class, 'manualAccredit']);
+    Route::delete('/accreditation/events/{eventId}/manual/{attendeeId}', [EligibilityController::class, 'revokeManual']);
 
 Route::get('/abstracts/rankings', [AbstractRankingController::class, 'preview']);
 Route::post('/abstracts/rankings/process', [AbstractRankingController::class, 'process']);

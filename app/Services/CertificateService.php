@@ -5,21 +5,18 @@ namespace App\Services;
 use App\Models\Attendee;
 use App\Models\Certificate;
 use App\Models\Event;
-use Barryvdh\DomPDF\Facade\Pdf; // If your PassPdfService imports PDF differently, match it.
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CertificateService
 {
     /**
-     * Certificate types. Keys must match the front end's CERTIFICATE_TYPES.
-     * `body` is the predicate dropped into the certificate sentence:
-     * "...in recognition of having {body} {Event}."
+     * key => label + Blade view.
+     * `key` must match CERTIFICATE_TYPES in the React page.
      */
     public const TYPES = [
-        'attendance'    => ['label' => 'Certificate of Attendance',    'body' => 'attended'],
-        'participation' => ['label' => 'Certificate of Participation', 'body' => 'actively participated in'],
-        'speaker'       => ['label' => 'Speaker Certificate',          'body' => 'served as a speaker at'],
-        'facilitator'   => ['label' => 'Facilitator Certificate',      'body' => 'served as a facilitator at'],
-        'exhibitor'     => ['label' => 'Exhibitor Certificate',        'body' => 'participated as an exhibitor at'],
+        'attendance'       => ['label' => 'Certificate of Attendance',          'view' => 'certificates.attendance'],
+        'oral_presenter'   => ['label' => 'Certificate of Oral Presentation',   'view' => 'certificates.oral'],
+        'poster_presenter' => ['label' => 'Certificate of Poster Presentation', 'view' => 'certificates.poster'],
     ];
 
     public static function typeKeys(): array
@@ -29,38 +26,36 @@ class CertificateService
 
     public static function label(string $type): string
     {
-        return self::TYPES[$type]['label'] ?? (ucfirst($type) . ' Certificate');
+        return self::TYPES[$type]['label'] ?? ucfirst(str_replace('_', ' ', $type));
     }
 
-    public static function body(string $type): string
+    public static function view(string $type): string
     {
-        return self::TYPES[$type]['body'] ?? 'participated in';
+        return self::TYPES[$type]['view'] ?? 'certificates.attendance';
     }
 
     /**
-     * Render the certificate to PDF and return the raw bytes.
+     * Render the certificate PDF and return the raw bytes.
      */
     public function generate(Attendee $attendee, Certificate $certificate, Event $event): string
     {
-        $pdf = Pdf::loadView('certificates.template', [
-            'fullName'          => $this->fullName($attendee),
-            'typeLabel'         => self::label($certificate->type),
-            'bodyText'          => self::body($certificate->type),
-            'eventName'         => $event->name ?? $event->title ?? 'the Conference',
-            'certificateNumber' => $certificate->certificateNumber,
-            'issuedDate'        => optional($certificate->issuedAt)->format('F j, Y') ?? now()->format('F j, Y'),
-        ])->setPaper('a4', 'landscape');
+        $data = [
+            'typeLabel' => self::label($certificate->type),
+            'fullName'  => $this->fullName($attendee),
+        ];
 
-        return $pdf->output();
+        return Pdf::loadView(self::view($certificate->type), $data)
+            ->setPaper('a4', 'landscape')
+            ->output();
     }
 
-    private function fullName(Attendee $attendee): string
+    protected function fullName(Attendee $attendee): string
     {
-        return trim(
-            ($attendee->title ? $attendee->title . ' ' : '') .
-            ($attendee->firstName ?? '') . ' ' .
-            ($attendee->lastName ?? '') . ' ' .
-            ($attendee->otherNames ?? '')
-        );
+        return trim(implode(' ', array_filter([
+            $attendee->title ?? null,
+            $attendee->firstName ?? null,
+            $attendee->lastName ?? null,
+            $attendee->otherNames ?? null,
+        ])));
     }
 }
