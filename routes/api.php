@@ -314,24 +314,19 @@ Route::prefix('abstracts')->group(function () {
     Route::post('/tickets/{ticket}/qr/regenerate', [TicketQrController::class, 'regenerate']);
     Route::get('/tickets/{ticket}/qr/download', [TicketQrController::class, 'download']);
 
-    Route::get('/meals/{meal}/tickets/download-zip', [MealTicketController::class, 'downloadZip']);
-    Route::get('/meals/{meal}/tickets/download-pdf', [MealTicketController::class, 'downloadPdf']);
+   // Scanner operators (add your scanner/admin role middleware)
+    Route::get('/scanner/current', [MealScannerController::class, 'current']);
+    Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
 
-    Route::post('/scanner/validate', [ScannerController::class, 'validateTicket']);
-    Route::post('/scanner/redeem', [ScannerController::class, 'redeem']);
-
-    Route::get('/meals/{meal}/summary', [ReportController::class, 'summary']);
-    Route::get('/meals/{meal}/scan-logs', [ReportController::class, 'scanLogs']);
-
-    Route::apiResource('events', EventController::class);
-
-    Route::get('/events/meal-sessions/all', [MealSessionController::class, 'getMealSessions']);
-    Route::get('/events/{event}/meal-sessions', [MealSessionController::class, 'index']);
-    Route::post('/events/{event}/meal-sessions', [MealSessionController::class, 'store']);
-    Route::get('/meal-sessions/{mealSession}', [MealSessionController::class, 'show']);
+    // Admin / organisers (add your admin role middleware)
+    Route::get('/meal-sessions', [MealSessionController::class, 'index']);
+    Route::post('/meal-sessions', [MealSessionController::class, 'store']);
     Route::put('/meal-sessions/{mealSession}', [MealSessionController::class, 'update']);
     Route::patch('/meal-sessions/{mealSession}/status', [MealSessionController::class, 'updateStatus']);
     Route::delete('/meal-sessions/{mealSession}', [MealSessionController::class, 'destroy']);
+    Route::get('/meal-sessions/{mealSession}/redemptions', [MealSessionController::class, 'redemptions']);
+    Route::delete('/meal-sessions/{mealSession}/redemptions/{redemptionId}', [MealSessionController::class, 'destroyRedemption']);
+    
 
     Route::get('/events/{event}/passes', [EventPassController::class, 'index']);
     Route::post('/events/{event}/generate-passes', [EventPassController::class, 'generate']);

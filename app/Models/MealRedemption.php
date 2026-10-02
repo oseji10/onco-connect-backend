@@ -8,17 +8,9 @@ class MealRedemption extends Model
 {
     protected $primaryKey = 'redemptionId';
 
-    protected $fillable = [
-        'mealSessionId',
-        'passId',
-        'redeemedBy',
-        'deviceName',
-        'redeemedAt',
-    ];
+    protected $fillable = ['mealSessionId', 'passId', 'redeemedBy', 'deviceName', 'redeemedAt'];
 
-    protected $casts = [
-        'redeemedAt' => 'datetime',
-    ];
+    protected $casts = ['redeemedAt' => 'datetime'];
 
     public function mealSession()
     {
