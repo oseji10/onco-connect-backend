@@ -15,16 +15,21 @@ class AbstractRankingService
     public const POSTER_THRESHOLD = 2.5;
 
     /**
-     * Which rows are versions of the same abstract.
-     *
-     * ASSUMPTION: every version of an abstract shares one `reference`.
-     * If your resubmissions are linked another way (a parent_id / original_id
-     * column, say), change ONLY this method, e.g.:
-     *     return (string) ($a->parent_id ?? $a->id);
+     * Revisions are identified by their reference:
+     *     ICW2026-0112      original submission
+     *     ICW2026-0112-R1   first revision
+     *     ICW2026-0112-R2   second revision ...
+     * Stripping the "-R<n>" suffix gives one key per abstract.
      */
     private function versionKey(AbstractSubmission $a): string
     {
-        return (string) $a->reference;
+        return strtoupper(preg_replace('/-R\d+$/i', '', trim((string) $a->reference)));
+    }
+
+    /** 0 for the original submission, n for "-R<n>". */
+    private function revisionNumber(AbstractSubmission $a): int
+    {
+        return preg_match('/-R(\d+)$/i', trim((string) $a->reference), $m) ? (int) $m[1] : 0;
     }
 
     /**
@@ -32,14 +37,15 @@ class AbstractRankingService
      * manually rejected (a manual rejection is a final decision this
      * pass must not overturn).
      *
-     * One entry per abstract, however many times it was resubmitted:
-     *   - the SCORE (and reviews) come from the FIRST version, which is the
-     *     one that was actually reviewed and ranked;
-     *   - everything else (title, body, authors, status, notifications)
-     *     comes from the LATEST version (is_current).
+     * One entry per abstract, however many times it was revised:
+     *   - CONTENT (title, body, authors, status, notifications) always comes
+     *     from the LATEST revision;
+     *   - the SCORE comes from the latest revision that has actually been
+     *     scored: if the newest revision is scored, its score is used;
+     *     if not, we fall back to the previous scored version.
      *
-     * The first version's score is placed on the latest version in memory
-     * only; it is never written back to the database.
+     * When the score is borrowed from an older version it is placed on the
+     * latest revision in memory only; it is never written back to the database.
      */
     private function eligiblePool(): Collection
     {
@@ -50,29 +56,37 @@ class AbstractRankingService
         $entries = $all
             ->groupBy(fn (AbstractSubmission $a) => $this->versionKey($a))
             ->map(function (Collection $versions) {
-                /** @var AbstractSubmission $first */
-                $first = $versions->sortBy('id')->first();
-                /** @var AbstractSubmission $latest */
-                $latest = $versions->firstWhere('is_current', true)
-                    ?? $versions->sortByDesc('id')->first();
+                // Newest revision first (id breaks ties between equal numbers).
+                $newestFirst = $versions
+                    ->sort(fn (AbstractSubmission $a, AbstractSubmission $b) =>
+                        [$this->revisionNumber($b), $b->id] <=> [$this->revisionNumber($a), $a->id])
+                    ->values();
 
-                if ($first->average_score === null || $latest->status === 'rejected') {
+                /** @var AbstractSubmission $latest */
+                $latest = $newestFirst->first();
+
+                /** @var AbstractSubmission|null $scored */
+                $scored = $newestFirst->first(fn (AbstractSubmission $v) => $v->average_score !== null);
+
+                if ($scored === null || $latest->status === 'rejected') {
                     return null;
                 }
 
-                if (! $latest->is($first)) {
-                    // Present the first version's score + review breakdown
-                    // on the latest version's content, without persisting it.
-                    $latest->setAttribute('average_score', $first->average_score);
+                if (! $latest->is($scored)) {
+                    // Newest revision isn't scored yet: show the older version's
+                    // score + review breakdown on the new content, unsaved.
+                    $latest->setAttribute('average_score', $scored->average_score);
                     $latest->syncOriginalAttribute('average_score');
-                    $latest->setRelation('assignments', $first->assignments);
+                    $latest->setRelation('assignments', $scored->assignments);
                 }
+
+                $original = $newestFirst->last();
 
                 return [
                     'abstract' => $latest,
-                    'score' => (float) $first->average_score,
+                    'score' => (float) $scored->average_score,
                     // Tie-break: earlier ORIGINAL submission ranks higher.
-                    'submitted_at' => $first->submitted_at,
+                    'submitted_at' => $original->submitted_at,
                 ];
             })
             ->filter()
