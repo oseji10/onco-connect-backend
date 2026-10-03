@@ -15,25 +15,78 @@ class AbstractRankingService
     public const POSTER_THRESHOLD = 2.5;
 
     /**
+     * Which rows are versions of the same abstract.
+     *
+     * ASSUMPTION: every version of an abstract shares one `reference`.
+     * If your resubmissions are linked another way (a parent_id / original_id
+     * column, say), change ONLY this method, e.g.:
+     *     return (string) ($a->parent_id ?? $a->id);
+     */
+    private function versionKey(AbstractSubmission $a): string
+    {
+        return (string) $a->reference;
+    }
+
+    /**
      * Abstracts eligible for automatic ranking: scored, and not already
      * manually rejected (a manual rejection is a final decision this
      * pass must not overturn).
+     *
+     * One entry per abstract, however many times it was resubmitted:
+     *   - the SCORE (and reviews) come from the FIRST version, which is the
+     *     one that was actually reviewed and ranked;
+     *   - everything else (title, body, authors, status, notifications)
+     *     comes from the LATEST version (is_current).
+     *
+     * The first version's score is placed on the latest version in memory
+     * only; it is never written back to the database.
      */
     private function eligiblePool(): Collection
     {
-        return AbstractSubmission::query()
+        $all = AbstractSubmission::query()
             ->with(['authors', 'assignments.reviewer', 'assignments.review'])
-            ->whereNotNull('average_score')
-            ->where('status', '!=', 'rejected')
-            ->get()
-            ->sort(function (AbstractSubmission $a, AbstractSubmission $b) {
-                $cmp = (float) $b->average_score <=> (float) $a->average_score;
+            ->get();
+
+        $entries = $all
+            ->groupBy(fn (AbstractSubmission $a) => $this->versionKey($a))
+            ->map(function (Collection $versions) {
+                /** @var AbstractSubmission $first */
+                $first = $versions->sortBy('id')->first();
+                /** @var AbstractSubmission $latest */
+                $latest = $versions->firstWhere('is_current', true)
+                    ?? $versions->sortByDesc('id')->first();
+
+                if ($first->average_score === null || $latest->status === 'rejected') {
+                    return null;
+                }
+
+                if (! $latest->is($first)) {
+                    // Present the first version's score + review breakdown
+                    // on the latest version's content, without persisting it.
+                    $latest->setAttribute('average_score', $first->average_score);
+                    $latest->syncOriginalAttribute('average_score');
+                    $latest->setRelation('assignments', $first->assignments);
+                }
+
+                return [
+                    'abstract' => $latest,
+                    'score' => (float) $first->average_score,
+                    // Tie-break: earlier ORIGINAL submission ranks higher.
+                    'submitted_at' => $first->submitted_at,
+                ];
+            })
+            ->filter()
+            ->values();
+
+        return $entries
+            ->sort(function (array $a, array $b) {
+                $cmp = $b['score'] <=> $a['score'];
                 if ($cmp !== 0) {
                     return $cmp;
                 }
-                // Tie-break: earlier submission ranks higher.
-                return $a->submitted_at <=> $b->submitted_at;
+                return $a['submitted_at'] <=> $b['submitted_at'];
             })
+            ->pluck('abstract')
             ->values();
     }
 
@@ -257,10 +310,15 @@ class AbstractRankingService
      * Resolve a named category to a base query. Used by the custom-message
      * endpoint so "oral presenters" / "poster presenters" / etc. stay in
      * one place rather than being re-derived in the controller.
+     *
+     * Only the latest version of each abstract is ever included, so an
+     * author who resubmitted is messaged once, not once per version.
      */
     public function abstractsForCategory(string $category): Collection
     {
-        $query = AbstractSubmission::query()->with('authors');
+        $query = AbstractSubmission::query()
+            ->with('authors')
+            ->where('is_current', true);
 
         match ($category) {
             'oral' => $query->where('status', 'accepted')->where('presentation_type', 'oral'),
