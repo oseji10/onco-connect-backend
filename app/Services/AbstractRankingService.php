@@ -335,8 +335,12 @@ class AbstractRankingService
             ->where('is_current', true);
 
         match ($category) {
-            'oral' => $query->where('status', 'accepted')->where('presentation_type', 'oral'),
-            'poster' => $query->where('status', 'accepted')->where('presentation_type', 'poster'),
+            'oral' => $query
+            // ->where('status', 'accepted')
+            ->where('presentation_type', 'oral'),
+            'poster' => $query
+            // ->where('status', 'accepted')
+            ->where('presentation_type', 'poster'),
             'pending' => $query->where('classification_group', 'pending'),
             'rejected' => $query->where('status', 'rejected'),
             'all' => null,

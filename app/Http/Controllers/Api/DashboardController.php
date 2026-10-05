@@ -157,7 +157,7 @@ class DashboardController extends Controller
 $abstractsSubmitted = AbstractSubmission::current()->count();
 
 $abstractsAccepted = AbstractSubmission::current()
-    ->where('status', 'accepted')
+    // ->where('status', 'accepted')
     ->count();
 
 $abstractsRejected = AbstractSubmission::current()
@@ -165,12 +165,12 @@ $abstractsRejected = AbstractSubmission::current()
     ->count();
 
 $posterCount = AbstractSubmission::current()
-    ->where('status', 'accepted')
+    // ->where('status', 'accepted')
     ->where('presentation_type', 'Poster')
     ->count();
 
 $oralCount = AbstractSubmission::current()
-    ->where('status', 'accepted')
+    // ->where('status', 'accepted')
     ->where('presentation_type', 'Oral')
     ->count();
 

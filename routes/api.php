@@ -54,8 +54,26 @@ use App\Http\Controllers\Api\ParticipantAttendanceController;
 use App\Http\Controllers\Api\EligibilityController;
 
 use App\Http\Controllers\Api\PasswordResetController;
-use App\Http\Controllers\Api\MealScannerController;
+// use App\Http\Controllers\Api\MealScannerController;
+use App\Http\Controllers\Api\QuestionnaireController;
+use App\Http\Controllers\Api\PanelScoringController;
+use App\Http\Controllers\Api\OralScoringAdminController;
 
+
+
+use App\Http\Controllers\Api\MealScannerController;
+use App\Http\Controllers\Api\PublicQuestionnaireController;
+use App\Http\Controllers\Api\QuestionnaireAdminController;
+use App\Http\Controllers\Api\QuestionnaireInvitationController;
+
+use App\Http\Controllers\Api\AttendeeMessageController;
+
+
+
+Route::prefix('panel/{token}')->middleware('throttle:120,1')->group(function () {
+    Route::get('/presentations', [PanelScoringController::class, 'index']);
+    Route::post('/presentations/{abstract}/score', [PanelScoringController::class, 'score']);
+});
 
 // ── Public activation (signed URL) ────────────────────────────────────────
 Route::get('/author/activate/{user}',  [AuthorActivationController::class, 'show'])
@@ -64,6 +82,20 @@ Route::get('/author/activate/{user}',  [AuthorActivationController::class, 'show
 
 Route::post('/author/activate/{user}', [AuthorActivationController::class, 'store']);
     // ->middleware('signed');
+
+
+
+
+/*
+|--------------------------------------------------------------------------
+| PUBLIC (no login): the personal token in the URL is the credential
+|--------------------------------------------------------------------------
+*/
+Route::middleware('throttle:60,1')->prefix('public')->group(function () {
+    Route::get('/questionnaire/{token}', [PublicQuestionnaireController::class, 'show']);
+    Route::post('/questionnaire/{token}', [PublicQuestionnaireController::class, 'submit']);
+    Route::get('/certificate/{token}', [PublicQuestionnaireController::class, 'certificate']);
+});
 
 // ── Authenticated author area ────────────────────────────────────────────
 Route::middleware('auth:api')->group(function () {
@@ -136,6 +168,60 @@ Route::middleware(['auth:api', 'facility.scope', 'password.changed',])->group(fu
 Route::patch('/conference-settings', [ConferenceSettingController::class, 'update']);
 
 
+
+
+/*
+|--------------------------------------------------------------------------
+| PROTECTED
+|--------------------------------------------------------------------------
+*/
+
+Route::post('conference/notifications/custom', [AttendeeMessageController::class, 'sendCustom']);
+
+    // ── Participant (any logged-in participant) ──────────────────────────
+    Route::get('/participant/attendance', [ParticipantAttendanceController::class, 'show']);
+    Route::post('/participant/sessions/{session}/check-in', [ParticipantAttendanceController::class, 'checkIn']);
+    Route::get('/participant/questionnaire', [QuestionnaireController::class, 'show']);
+    Route::post('/participant/questionnaire', [QuestionnaireController::class, 'submit']);
+    Route::get('/participant/certificate', [CertificateController::class, 'download']);
+    // (the old POST /participant/feedback route is gone: delete it if it is still there)
+
+    // ── Scanner operators (add your scanner/admin role middleware) ───────
+    Route::get('/scanner/current', [MealScannerController::class, 'current']);
+    Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
+
+    // ── Admin / organisers (add your admin role middleware) ──────────────
+
+    // Certificate eligibility + manual accreditation
+    Route::get('/accreditation/events/{eventId}/eligibility', [EligibilityController::class, 'index']);
+    Route::post('/accreditation/events/{eventId}/manual', [EligibilityController::class, 'manualAccredit']);
+    Route::delete('/accreditation/events/{eventId}/manual/{attendeeId}', [EligibilityController::class, 'revokeManual']);
+
+    // Meal sessions
+    Route::get('/meal-sessions', [MealSessionController::class, 'index']);
+    Route::post('/meal-sessions', [MealSessionController::class, 'store']);
+    Route::put('/meal-sessions/{mealSession}', [MealSessionController::class, 'update']);
+    Route::patch('/meal-sessions/{mealSession}/status', [MealSessionController::class, 'updateStatus']);
+    Route::delete('/meal-sessions/{mealSession}', [MealSessionController::class, 'destroy']);
+    Route::get('/meal-sessions/{mealSession}/redemptions', [MealSessionController::class, 'redemptions']);
+    Route::delete('/meal-sessions/{mealSession}/redemptions/{redemptionId}', [MealSessionController::class, 'destroyRedemption']);
+
+    // Questionnaire builder
+    Route::get('/questionnaire/admin', [QuestionnaireAdminController::class, 'index']);
+    Route::post('/questionnaire/questions', [QuestionnaireAdminController::class, 'store']);
+    Route::put('/questionnaire/questions/{question}', [QuestionnaireAdminController::class, 'update']);
+    Route::delete('/questionnaire/questions/{question}', [QuestionnaireAdminController::class, 'destroy']);
+    Route::post('/questionnaire/reorder', [QuestionnaireAdminController::class, 'reorder']);
+    Route::patch('/questionnaire/status', [QuestionnaireAdminController::class, 'setStatus']);
+    Route::post('/questionnaire/seed-defaults', [QuestionnaireAdminController::class, 'seedDefaults']);
+    Route::get('/questionnaire/results', [QuestionnaireAdminController::class, 'results']);
+
+    // Questionnaire invitations (emailed personal links)
+    Route::get('/questionnaire/invitations', [QuestionnaireInvitationController::class, 'index']);
+    Route::post('/questionnaire/invitations', [QuestionnaireInvitationController::class, 'send']);
+    Route::get('/questionnaire/link/{attendeeId}', [QuestionnaireInvitationController::class, 'link']);
+
+
     // Route::get('admin/rankings', [AbstractRankingController::class, 'index']);
     
 //     Route::post('admin/rankings/classify-and-notify', [AbstractRankingController::class, 'classifyAndNotify']);
@@ -162,6 +248,28 @@ Route::patch('/conference-settings', [ConferenceSettingController::class, 'updat
  
 // Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
 // Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
+
+
+// ── ADMIN: results + panelist management ────────────────────────────────
+// (Adjust the role middleware to however your app expresses "admin or super admin".)
+Route::middleware(['auth:api', 'role:super_admin,admin'])
+    ->prefix('oral-scoring')
+    ->group(function () {
+        Route::get('/results', [OralScoringAdminController::class, 'results']);
+ 
+        Route::get('/panelists', [OralScoringAdminController::class, 'panelists']);
+        Route::post('/panelists', [OralScoringAdminController::class, 'storePanelist']);
+        Route::patch('/panelists/{panelist}', [OralScoringAdminController::class, 'updatePanelist']);
+        Route::post('/panelists/{panelist}/regenerate', [OralScoringAdminController::class, 'regenerateToken']);
+        Route::delete('/panelists/{panelist}', [OralScoringAdminController::class, 'destroyPanelist']);
+    });
+
+// ADMIN (inside your existing auth:sanctum group + admin middleware)
+Route::get('/questionnaire/invitations', [QuestionnaireInvitationController::class, 'index']);
+Route::post('/questionnaire/invitations', [QuestionnaireInvitationController::class, 'send']);
+Route::get('/questionnaire/link/{attendeeId}', [QuestionnaireInvitationController::class, 'link']);
+Route::get('/participant/questionnaire', [QuestionnaireController::class, 'show']);
+    Route::post('/participant/questionnaire', [QuestionnaireController::class, 'submit']);
 
 
     // Participant (any logged-in participant)

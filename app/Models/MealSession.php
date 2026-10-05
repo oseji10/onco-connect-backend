@@ -1,5 +1,4 @@
 <?php
-// Split into app/Models/MealSession.php, MealRedemption.php, MealScanAttempt.php
 
 namespace App\Models;
 
@@ -24,6 +23,3 @@ class MealSession extends Model
         return $this->hasMany(MealRedemption::class, 'mealSessionId', 'mealSessionId');
     }
 }
-
-
-

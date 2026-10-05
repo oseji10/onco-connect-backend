@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceRecord;
 use App\Models\Attendee;
 use App\Models\Event;
-use App\Models\EventFeedback;
 use App\Models\EventSession;
 use App\Services\EligibilityService;
 use Illuminate\Http\JsonResponse;
@@ -73,7 +72,8 @@ class ParticipantAttendanceController extends Controller
             'data'    => [
                 'fullName'            => trim("{$attendee->firstName} {$attendee->lastName}"),
                 'isAccredited'        => (bool) $attendee->isAccredited,
-                'feedbackSubmitted'   => EventFeedback::where('attendeeId', $attendee->attendeeId)->exists(),
+                'feedbackSubmitted'   => \App\Models\QuestionnaireResponse::where('attendeeId', $attendee->attendeeId)->exists(),
+                'questionnaireOpen'   => ($event?->questionnaireStatus ?? 'closed') === 'open',
                 'certificateEligible' => (bool) $attendee->certificateEligible,
                 'requiredSessions'    => $event?->requiredSessions ?? $sessions->count(),
                 'sessions'            => $sessions,
@@ -104,44 +104,5 @@ class ParticipantAttendanceController extends Controller
         $this->eligibility->recalculate($attendee->fresh());
 
         return response()->json(['success' => true, 'message' => 'Checked in to "' . $session->title . '".']);
-    }
-
-    public function feedback(Request $request): JsonResponse
-    {
-        $attendee = $this->currentAttendee();
-        if (!$attendee) {
-            return response()->json(['success' => false, 'message' => 'No registration found.'], 404);
-        }
-
-        $hasPresence = $attendee->isAccredited
-            || AttendanceRecord::where('attendeeId', $attendee->attendeeId)->exists();
-
-        if (!$hasPresence) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please check in to at least one session before submitting feedback.',
-            ], 422);
-        }
-
-        $validated = $request->validate([
-            'rating'   => ['required', 'integer', 'between:1,5'],
-            'takeaway' => ['required', 'string', 'min:30', 'max:2000'],
-            'comments' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        EventFeedback::updateOrCreate(
-            ['attendeeId' => $attendee->attendeeId],
-            $validated + ['eventId' => $attendee->eventId]
-        );
-
-        $eligible = $this->eligibility->recalculate($attendee->fresh());
-
-        return response()->json([
-            'success' => true,
-            'message' => $eligible
-                ? 'Thank you! You are eligible for your certificate.'
-                : 'Thank you! Feedback saved. You still need to meet the attendance requirement.',
-            'data' => ['certificateEligible' => $eligible],
-        ]);
     }
 }

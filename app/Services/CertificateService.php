@@ -1,61 +1,63 @@
 <?php
+// app/Services/CertificateService.php
 
 namespace App\Services;
 
 use App\Models\Attendee;
-use App\Models\Certificate;
 use App\Models\Event;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 
 class CertificateService
 {
-    /**
-     * key => label + Blade view.
-     * `key` must match CERTIFICATE_TYPES in the React page.
-     */
-    public const TYPES = [
-        'attendance'       => ['label' => 'Certificate of Attendance',          'view' => 'certificates.attendance'],
-        'oral_presenter'   => ['label' => 'Certificate of Oral Presentation',   'view' => 'certificates.oral'],
-        'poster_presenter' => ['label' => 'Certificate of Poster Presentation', 'view' => 'certificates.poster'],
-    ];
+    public function __construct(protected EligibilityService $eligibility) {}
 
-    public static function typeKeys(): array
+    /** Returns a PDF download response, or a 403 JSON response if still locked. */
+    public function download(Attendee $attendee, Event $event)
     {
-        return array_keys(self::TYPES);
+        // Recompute so a stale flag can never unlock (or keep locked) a certificate.
+        $this->eligibility->recalculate($attendee);
+        $attendee->refresh();
+
+        if (!$attendee->certificateEligible) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your certificate is locked. Submit the questionnaire and make sure your attendance is confirmed.',
+            ], 403);
+        }
+
+        $logoPath = config('certificate.logo_path') ? public_path(config('certificate.logo_path')) : null;
+        $logo = null;
+        if ($logoPath && is_file($logoPath)) {
+            $ext = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION));
+            $mime = $ext === 'jpg' ? 'jpeg' : $ext;
+            $logo = "data:image/{$mime};base64," . base64_encode(file_get_contents($logoPath));
+        }
+
+        $pdf = Pdf::loadView('pdf.certificate', [
+            'name'         => trim(implode(' ', array_filter([$attendee->title, $attendee->firstName, $attendee->lastName, $attendee->otherNames]))),
+            'eventName'    => config('certificate.event_name') ?: ($event->name ?? $event->title ?? 'the conference'),
+            'dates'        => $this->dateRange($event),
+            'location'     => $event->location ?? null,
+            'organization' => config('certificate.organization'),
+            'signatories'  => config('certificate.signatories', []),
+            'logo'         => $logo,
+            'number'       => 'CERT-' . $attendee->uniqueId,
+            'issuedOn'     => now()->format('j F Y'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('certificate-' . $attendee->uniqueId . '.pdf');
     }
 
-    public static function label(string $type): string
+    private function dateRange(Event $event): ?string
     {
-        return self::TYPES[$type]['label'] ?? ucfirst(str_replace('_', ' ', $type));
-    }
+        if (!$event->startDate) return null;
 
-    public static function view(string $type): string
-    {
-        return self::TYPES[$type]['view'] ?? 'certificates.attendance';
-    }
+        $start = Carbon::parse($event->startDate);
+        $end   = $event->endDate ? Carbon::parse($event->endDate) : $start;
 
-    /**
-     * Render the certificate PDF and return the raw bytes.
-     */
-    public function generate(Attendee $attendee, Certificate $certificate, Event $event): string
-    {
-        $data = [
-            'typeLabel' => self::label($certificate->type),
-            'fullName'  => $this->fullName($attendee),
-        ];
-
-        return Pdf::loadView(self::view($certificate->type), $data)
-            ->setPaper('a4', 'landscape')
-            ->output();
-    }
-
-    protected function fullName(Attendee $attendee): string
-    {
-        return trim(implode(' ', array_filter([
-            $attendee->title ?? null,
-            $attendee->firstName ?? null,
-            $attendee->lastName ?? null,
-            $attendee->otherNames ?? null,
-        ])));
+        return $start->isSameDay($end)
+            ? $start->format('j F Y')
+            : $start->format('j M Y') . ' – ' . $end->format('j M Y');
     }
 }

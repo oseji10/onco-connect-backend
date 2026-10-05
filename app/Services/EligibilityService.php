@@ -5,13 +5,13 @@ namespace App\Services;
 use App\Models\Attendee;
 use App\Models\AttendanceRecord;
 use App\Models\Event;
-use App\Models\EventFeedback;
 use App\Models\EventSession;
+use App\Models\QuestionnaireResponse;
 
 /**
  * Single source of truth for "can this person get a certificate?".
  * Call recalculate() after ANY change: venue accreditation, self check-in,
- * feedback submission, manual override or revoke.
+ * questionnaire submission, manual override or revoke.
  */
 class EligibilityService
 {
@@ -29,9 +29,9 @@ class EligibilityService
             $present = (bool) $attendee->isAccredited
                 || ($required > 0 && $attended >= $required);
 
-            $hasFeedback = EventFeedback::where('attendeeId', $attendee->attendeeId)->exists();
+            $submitted = QuestionnaireResponse::where('attendeeId', $attendee->attendeeId)->exists();
 
-            $eligible = $present && $hasFeedback;
+            $eligible = $present && $submitted;
         }
 
         $attendee->forceFill([

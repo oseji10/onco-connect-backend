@@ -26,7 +26,7 @@ class EligibilityController extends Controller
 
         $attendees = Attendee::where('eventId', $eventId)
             ->withCount('attendanceRecords')
-            ->with('feedback:feedbackId,attendeeId')
+            ->with('questionnaireResponse:responseId,attendeeId')
             ->orderBy('firstName')
             ->get()
             ->map(fn (Attendee $a) => [
@@ -37,7 +37,7 @@ class EligibilityController extends Controller
                 'participationType'    => $a->participationType,
                 'isAccredited'         => (bool) $a->isAccredited,
                 'sessionsAttended'     => $a->attendance_records_count,
-                'feedbackSubmitted'    => (bool) $a->feedback,
+                'feedbackSubmitted'    => (bool) $a->questionnaireResponse,
                 'manualOverride'       => (bool) $a->manualOverride,
                 'manualOverrideReason' => $a->manualOverrideReason,
                 'certificateEligible'  => (bool) $a->certificateEligible,
