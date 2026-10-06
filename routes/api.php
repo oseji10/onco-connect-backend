@@ -448,6 +448,7 @@ Route::prefix('abstracts')->group(function () {
     Route::get('/tickets/{ticket}/qr/download', [TicketQrController::class, 'download']);
 
 Route::get('/scanner/current', [MealScannerController::class, 'current']);
+    Route::get('/scan/current', [MealScannerController::class, 'current']);
     Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
 
 
