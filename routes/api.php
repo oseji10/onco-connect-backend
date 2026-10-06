@@ -450,6 +450,7 @@ Route::prefix('abstracts')->group(function () {
 Route::get('/scanner/current', [MealScannerController::class, 'current']);
     Route::get('/scan/current', [MealScannerController::class, 'current']);
     Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
+    Route::post('/scan/redeem', [MealScannerController::class, 'redeem']);
 
 
     Route::get('/meal-sessions', [MealSessionController::class, 'index']);
