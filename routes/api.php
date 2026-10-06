@@ -67,6 +67,8 @@ use App\Http\Controllers\Api\QuestionnaireAdminController;
 use App\Http\Controllers\Api\QuestionnaireInvitationController;
 
 use App\Http\Controllers\Api\AttendeeMessageController;
+use App\Http\Controllers\Api\PassPrintController;
+use App\Http\Controllers\Api\VipController;
 
 
 
@@ -186,9 +188,29 @@ Route::post('conference/notifications/custom', [AttendeeMessageController::class
     Route::get('/participant/certificate', [CertificateController::class, 'download']);
     // (the old POST /participant/feedback route is gone: delete it if it is still there)
 
+Route::get('/attendance/days', [AttendanceController::class, 'days']);
+    Route::post('/attendance/days', [AttendanceController::class, 'storeDay']);
+    Route::delete('/attendance/days/{session}', [AttendanceController::class, 'destroyDay']);
+    Route::patch('/attendance/required', [AttendanceController::class, 'setRequired']);
+    Route::get('/attendance/days/{session}/records', [AttendanceController::class, 'records']);
+    Route::post('/attendance/days/{session}/records', [AttendanceController::class, 'addRecord']);
+    Route::delete('/attendance/days/{session}/records/{attendanceId}', [AttendanceController::class, 'removeRecord']);
+    Route::get('/attendance/people', [MealScannerController::class, 'people']);      // picker for manual marks
+
+    // Print passes (badge sheets)
+    Route::get('/passes/print/summary', [PassPrintController::class, 'summary']);
+    Route::get('/passes/print/download', [PassPrintController::class, 'download']);
+
+    // VIPs
+    Route::get('/vips', [VipController::class, 'index']);
+    Route::post('/vips', [VipController::class, 'store']);
+    Route::delete('/vips/{attendeeId}', [VipController::class, 'destroy']);
+
     // ── Scanner operators (add your scanner/admin role middleware) ───────
     Route::get('/scanner/current', [MealScannerController::class, 'current']);
-    Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
+    Route::get('/scanner/people', [MealScannerController::class, 'people']);
+    Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);        // meal entry
+    Route::post('/scanner/attendance', [AttendanceController::class, 'scan']);       // gate attendance
 
     // ── Admin / organisers (add your admin role middleware) ──────────────
 
@@ -249,6 +271,8 @@ Route::post('conference/notifications/custom', [AttendeeMessageController::class
 // Route::post('/abstracts/{abstract}/notify', [AbstractRankingController::class, 'notify']);
 // Route::patch('/abstracts/{abstract}/classify', [AbstractRankingController::class, 'classify']);
 
+Route::get('/passes/print/summary', [PassPrintController::class, 'summary']);
+Route::get('/passes/print/download', [PassPrintController::class, 'download']);
 
 // ── ADMIN: results + panelist management ────────────────────────────────
 // (Adjust the role middleware to however your app expresses "admin or super admin".)
