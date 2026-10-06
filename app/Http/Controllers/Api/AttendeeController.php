@@ -479,7 +479,8 @@ class AttendeeController extends Controller
             'category' => [
                 'required',
                 Rule::in([
-                    'healthcare_professional',
+                     'healthcare_professional',
+                    'cancer_advocate',
                     'cancer_survivor',
                     'development_partner',
                     'student',
@@ -487,6 +488,15 @@ class AttendeeController extends Controller
                     'general_public',
                     'government_official',
                     'other',
+                    'radiographer',
+                    'nurse',
+                    'doctor',
+                    'pharmacist',
+                    'lab_scientist',
+                    'medical_physicist',
+                    'other_health_worker',
+                    'media_representative',
+                    'lab_scientist',
                 ]),
             ],
 
