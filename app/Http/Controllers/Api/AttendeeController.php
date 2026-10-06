@@ -142,6 +142,7 @@ class AttendeeController extends Controller
                     'medical_physicist',
                     'other_health_worker',
                     'media_representative',
+                    'lab_scientist',
                 ]),
             ],
 
