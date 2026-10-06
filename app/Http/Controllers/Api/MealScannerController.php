@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AttendanceRecord;
 use App\Models\Attendee;
 use App\Models\Event;
 use App\Models\EventPass;
 use App\Models\MealRedemption;
 use App\Models\MealScanAttempt;
 use App\Models\MealSession;
+use App\Services\AttendanceService;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -17,12 +19,15 @@ use Illuminate\Support\Facades\Auth;
 
 /**
  * Buffet entrance scanner.
- * One scan per event pass per meal session. Only venue-accredited attendees
- * with an active pass are let in.
+ * One scan per event pass per meal session. Only venue-accredited attendees with an active pass get in.
+ * Works from a scanned QR OR by picking a person by name (VIPs, dead phones, forgotten passes).
+ * A successful meal scan also marks that day's attendance if the gate has not already done so.
  */
 class MealScannerController extends Controller
 {
-    /** GET /scanner/current : the open session + live counters. */
+    public function __construct(protected AttendanceService $attendance) {}
+
+    /** GET /scanner/current : open meal session + today's conference day, with live counters. */
     public function current(): JsonResponse
     {
         $event = Event::where('status', 'active')->first();
@@ -32,6 +37,7 @@ class MealScannerController extends Controller
         }
 
         $session = MealSession::where('eventId', $event->eventId)->where('status', 'active')->first();
+        $day = $this->attendance->todaySession($event->eventId);
 
         return response()->json([
             'success' => true,
@@ -40,20 +46,97 @@ class MealScannerController extends Controller
                 'session'         => $session ? $this->sessionSummary($session) : null,
                 'servedCount'     => $session ? MealRedemption::where('mealSessionId', $session->mealSessionId)->count() : 0,
                 'accreditedCount' => Attendee::where('eventId', $event->eventId)->where('isAccredited', true)->count(),
+                'day'             => $day ? [
+                    'sessionId' => $day->sessionId,
+                    'title'     => $day->title,
+                    'startsAt'  => $day->startsAt->toIso8601String(),
+                    'endsAt'    => $day->endsAt->toIso8601String(),
+                ] : null,
+                'presentToday'    => $day ? $this->attendance->presentCount($day->sessionId) : 0,
             ],
         ]);
     }
 
-    /** POST /scanner/redeem  { token, deviceName } */
+    /**
+     * GET /scanner/people?search=
+     * Empty search = the VIP list. Otherwise matches name / unique ID / phone / organisation.
+     */
+    public function people(Request $request): JsonResponse
+    {
+        $event = Event::where('status', 'active')->first();
+
+        if (!$event) {
+            return response()->json(['success' => false, 'message' => 'No active event found.'], 404);
+        }
+
+        $search = trim((string) $request->query('search', ''));
+        $query = Attendee::where('eventId', $event->eventId);
+
+        if ($search === '') {
+            $query->where('isVip', true);
+        } else {
+            foreach (preg_split('/\s+/', $search) as $word) {
+                $query->where(function ($w) use ($word) {
+                    foreach (['firstName', 'lastName', 'uniqueId', 'phoneNumber', 'organizationName'] as $col) {
+                        $w->orWhere($col, 'like', "%{$word}%");
+                    }
+                });
+            }
+        }
+
+        $people = $query->orderByDesc('isVip')->orderBy('firstName')->limit(25)->get();
+        $ids = $people->pluck('attendeeId')->all();
+
+        $session = MealSession::where('eventId', $event->eventId)->where('status', 'active')->first();
+        $served = $session
+            ? MealRedemption::where('meal_redemptions.mealSessionId', $session->mealSessionId)
+                ->join('event_passes', 'event_passes.passId', '=', 'meal_redemptions.passId')
+                ->whereIn('event_passes.attendeeId', $ids)
+                ->pluck('meal_redemptions.redeemedAt', 'event_passes.attendeeId')
+            : collect();
+
+        $day = $this->attendance->todaySession($event->eventId);
+        $presentIds = $day
+            ? AttendanceRecord::where('sessionId', $day->sessionId)->whereIn('attendeeId', $ids)->pluck('attendeeId')->all()
+            : [];
+
+        return response()->json([
+            'success' => true,
+            'message' => 'OK',
+            'data'    => [
+                'people' => $people->map(fn (Attendee $a) => [
+                    'attendeeId'   => $a->attendeeId,
+                    'fullName'     => trim(implode(' ', array_filter([$a->title, $a->firstName, $a->lastName, $a->otherNames]))),
+                    'organization' => $a->organizationName,
+                    'uniqueId'     => $a->uniqueId,
+                    'photoUrl'     => $a->photoUrl,
+                    'isVip'        => (bool) $a->isVip,
+                    'guests'       => (int) ($a->vipGuests ?? 0),
+                    'isAccredited' => (bool) $a->isAccredited,
+                    'served'       => $served->has($a->attendeeId),
+                    'servedAt'     => $served->has($a->attendeeId) ? Carbon::parse($served->get($a->attendeeId))->toIso8601String() : null,
+                    'presentToday' => in_array($a->attendeeId, $presentIds, true),
+                ])->values(),
+            ],
+        ]);
+    }
+
+    /** POST /scanner/redeem  { token | attendeeId, deviceName } */
     public function redeem(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'token'      => ['required', 'string', 'max:500'],
+            'token'      => ['nullable', 'string', 'max:500'],
+            'attendeeId' => ['nullable', 'integer'],
             'deviceName' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $token  = $this->normalizeToken($validated['token']);
-        $device = $validated['deviceName'] ?? null;
+        if (empty($validated['token']) && empty($validated['attendeeId'])) {
+            return response()->json(['success' => false, 'message' => 'Scan a pass or choose a person.', 'code' => 'missing'], 422);
+        }
+
+        $device   = $validated['deviceName'] ?? null;
+        $byPerson = !empty($validated['attendeeId']);
+        $token    = $byPerson ? 'attendee:' . $validated['attendeeId'] : $this->attendance->normalizeToken($validated['token']);
 
         $event = Event::where('status', 'active')->first();
         if (!$event) {
@@ -65,16 +148,20 @@ class MealScannerController extends Controller
             return $this->deny($request, $token, 'no_session', 'No meal session is open right now.');
         }
 
-        $pass = EventPass::where('eventId', $event->eventId)
-            ->where(function ($q) use ($token) {
-                $q->where('passCode', $token)->orWhere('serialNumber', $token);
-            })
-            ->first();
+        $pass = $byPerson
+            ? EventPass::where('eventId', $event->eventId)->where('attendeeId', $validated['attendeeId'])->first()
+            : EventPass::where('eventId', $event->eventId)
+                ->where(function ($q) use ($token) {
+                    $q->where('passCode', $token)->orWhere('serialNumber', $token);
+                })
+                ->first();
 
         if (!$pass) {
-            return $this->deny($request, $token, 'invalid_pass', 'This QR code is not a valid event pass.', 422, [
-                'session' => $session,
-            ]);
+            return $this->deny(
+                $request, $token, 'invalid_pass',
+                $byPerson ? 'This person has no event pass on record.' : 'This QR code is not a valid event pass.',
+                422, ['session' => $session]
+            );
         }
 
         $attendee = Attendee::where('attendeeId', $pass->attendeeId)->first();
@@ -121,12 +208,22 @@ class MealScannerController extends Controller
             return $this->alreadyRedeemed($request, $token, $session, $existing, $ctx);
         }
 
+        // Backstop: someone eating today was clearly here today. Never let this block a meal.
+        try {
+            $day = $this->attendance->sessionForDate($event->eventId, $session->mealDate);
+            if ($day) {
+                $this->attendance->mark($attendee, $day, 'meal', Auth::id());
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Allowed in.',
             'data'    => [
                 'mealSession' => $this->sessionSummary($session),
-                'attendee'    => $this->attendeeSummary($attendee, $pass),
+                'attendee'    => $this->attendance->attendeeSummary($attendee, $pass),
                 'redeemedAt'  => $redemption->redeemedAt->toIso8601String(),
                 'servedCount' => MealRedemption::where('mealSessionId', $session->mealSessionId)->count(),
             ],
@@ -170,31 +267,10 @@ class MealScannerController extends Controller
             'code'    => $code,
             'data'    => [
                 'mealSession' => isset($ctx['session']) ? $this->sessionSummary($ctx['session']) : null,
-                'attendee'    => isset($ctx['attendee']) ? $this->attendeeSummary($ctx['attendee'], $ctx['pass'] ?? null) : null,
+                'attendee'    => isset($ctx['attendee']) ? $this->attendance->attendeeSummary($ctx['attendee'], $ctx['pass'] ?? null) : null,
                 'redeemedAt'  => $ctx['redeemedAt'] ?? null,
             ],
         ], $status);
-    }
-
-    /** Accepts a bare code or a verify URL like https://app/verify/ABC123. */
-    private function normalizeToken(string $raw): string
-    {
-        $text = trim($raw);
-
-        if (filter_var($text, FILTER_VALIDATE_URL)) {
-            $path     = parse_url($text, PHP_URL_PATH) ?: '';
-            $segments = array_values(array_filter(explode('/', $path)));
-
-            if ($segments) {
-                return end($segments);
-            }
-
-            parse_str(parse_url($text, PHP_URL_QUERY) ?? '', $query);
-
-            return $query['code'] ?? $query['pass'] ?? $query['q'] ?? $text;
-        }
-
-        return $text;
     }
 
     private function sessionSummary(MealSession $s): array
@@ -205,18 +281,6 @@ class MealScannerController extends Controller
             'mealDate'      => Carbon::parse($s->mealDate)->toDateString(),
             'startTime'     => substr((string) $s->startTime, 0, 5),
             'endTime'       => substr((string) $s->endTime, 0, 5),
-        ];
-    }
-
-    private function attendeeSummary(Attendee $a, ?EventPass $pass): array
-    {
-        return [
-            'fullName'          => trim(implode(' ', array_filter([$a->title, $a->firstName, $a->lastName, $a->otherNames]))),
-            'uniqueId'          => $a->uniqueId,
-            'category'          => $a->category,
-            'participationType' => $a->participationType,
-            'photoUrl'          => $a->photoUrl,
-            'serialNumber'      => $pass?->serialNumber,
         ];
     }
 }
