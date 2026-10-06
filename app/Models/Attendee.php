@@ -214,6 +214,15 @@ public function attendanceRecords()
 }
 
 
+ 
+ 
+  public function guests()
+  {
+      return $this->hasMany(self::class, 'vipHostId', 'attendeeId')->orderBy('attendeeId');
+  }
+
+
+
 /*
  * ADD to App\Models\Attendee:
  *
