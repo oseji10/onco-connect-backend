@@ -644,4 +644,32 @@ class AttendeeController extends Controller
                 STR_PAD_LEFT
             );
     }
+
+    public function qr(Attendee $attendee): JsonResponse
+{
+    $pass = $attendee->pass;
+
+    if (!$pass) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No pass found for this participant.',
+        ], 404);
+    }
+
+    // Generate if never created (e.g. VIPs) or if the file is missing from disk.
+    if (!$pass->qrUrl || !Storage::disk('public')->exists($pass->qrUrl)) {
+        $this->qrCodeService->generateForEventPass($pass);
+        $pass->refresh();
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'OK',
+        'data' => [
+            'qrUrl'        => $pass->qrUrl,
+            'serialNumber' => $pass->serialNumber,
+        ],
+    ]);
+}
+
 }

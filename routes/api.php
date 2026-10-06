@@ -452,6 +452,7 @@ Route::get('/scanner/current', [MealScannerController::class, 'current']);
     Route::post('/scanner/redeem', [MealScannerController::class, 'redeem']);
     Route::post('/scan/redeem', [MealScannerController::class, 'redeem']);
 
+Route::get('/conference/participants/{attendee}/qr', [AttendeeController::class, 'qr']);
 
     Route::get('/meal-sessions', [MealSessionController::class, 'index']);
     Route::post('/meal-sessions', [MealSessionController::class, 'store']);
