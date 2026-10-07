@@ -391,52 +391,74 @@ class AttendeeController extends Controller
     }
 
     public function resendPass(Attendee $attendee): JsonResponse
-    {
-        if (empty($attendee->email)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This participant has no email address on record.',
-            ], 422);
-        }
+{
+    if (empty($attendee->email)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'This participant has no email address on record.',
+        ], 422);
+    }
 
-        $pass = $attendee->pass;
+    $pass = $attendee->pass;
 
-        if (!$pass) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No pass found for this participant.',
-            ], 404);
-        }
+    if (!$pass) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No pass found for this participant.',
+        ], 404);
+    }
 
-        /*
-         * Regenerate QR.
-         */
-        $this->qrCodeService->generateForEventPass($pass);
+    /*
+     * Regenerate QR.
+     */
+    $this->qrCodeService->generateForEventPass($pass);
 
-        $pass->refresh();
+    $pass->refresh();
 
-        /*
-         * Regenerate PDF.
-         */
-        $pdfContent = $this->passPdfService->generate(
-            $attendee,
-            $pass
+    /*
+     * Generate PDF.
+     *
+     * IMPORTANT:
+     * $pdfContent is binary data. Do NOT pass it directly
+     * into a queued Mailable because Laravel's database queue
+     * serializes the job as JSON.
+     */
+    $pdfContent = $this->passPdfService->generate(
+        $attendee,
+        $pass
+    );
+
+    /*
+     * Store the PDF on the local filesystem.
+     *
+     * We store the file and only pass its path to the queued mail.
+     */
+    $pdfPath = 'passes/' . $pass->passCode . '.pdf';
+
+    Storage::disk('local')->put(
+        $pdfPath,
+        $pdfContent
+    );
+
+    /*
+     * Queue the email.
+     *
+     * Only the string path is passed to the queue.
+     */
+    Mail::to($attendee->email)
+        ->queue(
+            new AttendeePassMail(
+                $attendee,
+                $pass,
+                $pdfPath
+            )
         );
 
-        Mail::to($attendee->email)
-            ->send(
-                new AttendeePassMail(
-                    $attendee,
-                    $pass,
-                    $pdfContent
-                )
-            );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pass resent successfully to ' . $attendee->email,
-        ]);
-    }
+    return response()->json([
+        'success' => true,
+        'message' => 'Pass resent successfully to ' . $attendee->email,
+    ]);
+}
 
     private function generateSerialNumber(Event $event): string
     {
