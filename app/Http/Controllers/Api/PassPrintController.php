@@ -14,12 +14,13 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Admin: download event passes as print-ready badge sheets (4 per A4 page, portrait, 99 x 135 mm each).
- * Split into batches so big events don't hit time/memory limits. Protect with your admin middleware.
+ * Admin: download event passes as print-ready badge sheets (8 per A4 page, portrait, 99 x 68 mm each,
+ * black and white). Split into batches so big events don't hit time/memory limits.
+ * Protect with your admin middleware.
  */
 class PassPrintController extends Controller
 {
-    private const PER_SHEET = 4;
+    private const PER_SHEET = 8;
 
     public function __construct(protected QrCodeService $qrCodeService) {}
 
@@ -39,22 +40,36 @@ class PassPrintController extends Controller
             $query->where('participationType', $type);
         }
 
+        // VIP guests are stored as VIP attendees too (isVip = true), so "vip" includes them.
         if ($group === 'vip') {
             $query->where('isVip', true);
         } elseif ($group === 'regular') {
             $query->where('isVip', false);
         }
 
-        // Print a single person's badge (e.g. one VIP)
+        // Print a single person's badge (e.g. one VIP or one guest)
         if ($request->filled('attendeeId')) {
             $query->where('attendeeId', (int) $request->query('attendeeId'));
         }
 
-        // Alphabetical: easier to hand out at the registration table.
+        // Print one VIP together with all of their guests
+        $hostId = $request->filled('hostId') ? (int) $request->query('hostId') : null;
+        if ($hostId) {
+            $query->where(function ($w) use ($hostId) {
+                $w->where('attendeeId', $hostId)->orWhere('vipHostId', $hostId);
+            });
+        }
+
+        // VIP prints keep each VIP's guests right behind them (ids are VIP-date-001, VIP-date-001-G1, ...).
+        if ($hostId || $group === 'vip') {
+            return $query->orderBy('uniqueId')->orderBy('attendeeId');
+        }
+
+        // Everyone else: alphabetical, easier to hand out at the registration table.
         return $query->orderBy('lastName')->orderBy('firstName')->orderBy('attendeeId');
     }
 
-    /** Whole sheets only, between 4 and 200 badges per file. */
+    /** Whole sheets only, between 8 and 200 badges per file. */
     private function size(Request $request): int
     {
         $size = max(self::PER_SHEET, min(200, (int) $request->query('size', 80)));
@@ -87,7 +102,7 @@ class PassPrintController extends Controller
         ]);
     }
 
-    /** GET /passes/print/download?type=&group=&size=&batch=&attendeeId= : PDF */
+    /** GET /passes/print/download?type=&group=&size=&batch=&attendeeId=&hostId= : PDF */
     public function download(Request $request)
     {
         $event = $this->event();
@@ -135,12 +150,12 @@ class PassPrintController extends Controller
 
         return [
             'name'     => $name,
-            'size'     => $len <= 20 ? 20 : ($len <= 36 ? 17 : ($len <= 60 ? 14 : 12)), // shrink long names so they never overflow
+            'size'     => $len <= 20 ? 20 : ($len <= 36 ? 17 : ($len <= 60 ? 14 : 12)), // (the 8-up template sizes names itself)
             'org'      => $a->organizationName ? Str::limit(mb_strtoupper($a->organizationName), 70) : null,
             'uniqueId' => $a->uniqueId,
             'serial'   => $pass?->serialNumber,
             'label'    => $isVip ? 'VIP' : ($a->category ? Str::headline($a->category) : 'Participant'),
-            'color'    => $isVip ? '#b45309' : ($a->participationType === 'Virtual' ? '#1d4ed8' : '#166534'),
+            'color'    => $isVip ? '#b45309' : ($a->participationType === 'Virtual' ? '#1d4ed8' : '#166534'), // unused: passes print black and white
             'qr'       => $pass ? $this->qrDataUri($pass) : null,
         ];
     }
