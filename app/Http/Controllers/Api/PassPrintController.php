@@ -14,13 +14,13 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Admin: download event passes as print-ready badge sheets (8 per A4 page, portrait, 99 x 68 mm each,
+ * Admin: download event passes as print-ready badge sheets (10 per A4 page, portrait, 99 x 56 mm each,
  * black and white). Split into batches so big events don't hit time/memory limits.
  * Protect with your admin middleware.
  */
 class PassPrintController extends Controller
 {
-    private const PER_SHEET = 8;
+    private const PER_SHEET = 10;
 
     public function __construct(protected QrCodeService $qrCodeService) {}
 
@@ -69,7 +69,7 @@ class PassPrintController extends Controller
         return $query->orderBy('lastName')->orderBy('firstName')->orderBy('attendeeId');
     }
 
-    /** Whole sheets only, between 8 and 200 badges per file. */
+    /** Whole sheets only, between 10 and 200 badges per file. */
     private function size(Request $request): int
     {
         $size = max(self::PER_SHEET, min(200, (int) $request->query('size', 80)));
@@ -150,7 +150,7 @@ class PassPrintController extends Controller
 
         return [
             'name'     => $name,
-            'size'     => $len <= 20 ? 20 : ($len <= 36 ? 17 : ($len <= 60 ? 14 : 12)), // (the 8-up template sizes names itself)
+            'size'     => $len <= 20 ? 20 : ($len <= 36 ? 17 : ($len <= 60 ? 14 : 12)), // (the 10-up template sizes names itself)
             'org'      => $a->organizationName ? Str::limit(mb_strtoupper($a->organizationName), 70) : null,
             'uniqueId' => $a->uniqueId,
             'serial'   => $pass?->serialNumber,
