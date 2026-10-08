@@ -72,10 +72,10 @@ class CertificateService
     {
         return match ($type) {
             self::TYPE_ORAL =>
-                storage_path('app/public/images/certificate-bg-oral.jpg'),
+                storage_path('app/public/images/certificate-bg-oral.png'),
 
             self::TYPE_POSTER =>
-                storage_path('app/public/images/certificate-bg-poster.jpg'),
+                storage_path('app/public/images/certificate-bg-poster.png'),
 
             default =>
                 storage_path('app/public/images/certificate-bg-attendance.png'),
