@@ -78,7 +78,7 @@ class CertificateService
                 storage_path('app/public/images/certificate-bg-poster.jpg'),
 
             default =>
-                storage_path('app/public/images/certificate-bg-attendance.jpg'),
+                storage_path('app/public/images/certificate-bg-attendance.png'),
         };
     }
 
