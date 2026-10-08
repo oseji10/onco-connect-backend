@@ -70,6 +70,7 @@ use App\Http\Controllers\Api\AttendeeMessageController;
 use App\Http\Controllers\Api\PassPrintController;
 use App\Http\Controllers\Api\VipController;
 use App\Http\Controllers\Api\PublicCertificateController;
+use App\Http\Controllers\Api\CertificateDownloadAdminController;
 
 
 
@@ -183,6 +184,10 @@ Route::middleware(['auth:api', 'facility.scope', 'password.changed',])->group(fu
 Route::patch('/conference-settings', [ConferenceSettingController::class, 'update']);
 
 
+
+
+Route::get('/certificates/downloads/stats', [CertificateDownloadAdminController::class, 'stats']);
+Route::get('/certificates/downloads', [CertificateDownloadAdminController::class, 'index']);
 
 
 /*
