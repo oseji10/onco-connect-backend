@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendee;
 use App\Models\Event;
 use App\Services\CertificateService;
+use App\Services\CertificateDownloadLogger;
 use App\Services\EligibilityService;
 use App\Services\PresenterService;
 use App\Services\QuestionnaireService;
