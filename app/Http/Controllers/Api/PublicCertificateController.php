@@ -56,28 +56,50 @@ class PublicCertificateController extends Controller
             return response()->json(['success' => false, 'message' => 'No active event found.'], 404);
         }
 
+        // $email = strtolower(trim($data['email']));
+
+        // $attendee = Attendee::where('eventId', $event->eventId)
+        //     ->whereRaw('LOWER(email) = ?', [$email])
+        //     ->get()
+        //     ->first(fn (Attendee $a) => $this->phonesMatch((string) $a->phoneNumber, $data['phone']));
+
+        // if (!$attendee) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'code'    => 'not_found',
+        //         'message' => "We couldn't find a registration with that email and phone number. Use the same details you registered with.",
+        //     ], 404);
+        // }
+
+        // if (!$attendee->isAccredited && !$attendee->manualOverride) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'code'    => 'not_accredited',
+        //         'message' => 'Our records show you were not accredited at the event, so you are not eligible for a certificate. If you think this is a mistake, please contact the organisers.',
+        //     ], 403);
+        // }
+
         $email = strtolower(trim($data['email']));
 
-        $attendee = Attendee::where('eventId', $event->eventId)
-            ->whereRaw('LOWER(email) = ?', [$email])
-            ->get()
-            ->first(fn (Attendee $a) => $this->phonesMatch((string) $a->phoneNumber, $data['phone']));
+$attendee = $this->findBestAttendee($event, $email, $data['phone']);
 
-        if (!$attendee) {
-            return response()->json([
-                'success' => false,
-                'code'    => 'not_found',
-                'message' => "We couldn't find a registration with that email and phone number. Use the same details you registered with.",
-            ], 404);
-        }
+if (!$attendee) {
+    return response()->json([
+        'success' => false,
+        'code'    => 'not_found',
+        'message' => "We couldn't find a registration with that email and phone number. Use the same details you registered with.",
+    ], 404);
+}
 
-        if (!$attendee->isAccredited && !$attendee->manualOverride) {
-            return response()->json([
-                'success' => false,
-                'code'    => 'not_accredited',
-                'message' => 'Our records show you were not accredited at the event, so you are not eligible for a certificate. If you think this is a mistake, please contact the organisers.',
-            ], 403);
-        }
+// $attendee is already the accredited duplicate if one exists,
+// so this only fires when NONE of their registrations were accredited.
+if (!$attendee->isAccredited && !$attendee->manualOverride) {
+    return response()->json([
+        'success' => false,
+        'code'    => 'not_accredited',
+        'message' => 'Our records show you were not accredited at the event, so you are not eligible for a certificate. If you think this is a mistake, please contact the organisers.',
+    ], 403);
+}
 
         $eligible = $this->eligibility->recalculate($attendee);
 
@@ -322,4 +344,54 @@ class PublicCertificateController extends Controller
 
         return strlen($a) >= 7 && $a === $b;
     }
+
+
+    /**
+ * Find the person's best registration for this event.
+ *
+ * 1. The entered email + phone must match at least one record (proof of identity).
+ * 2. Collect every record in the event sharing that email or that phone (duplicates).
+ * 3. Prefer an accredited record, then one already certificate-eligible,
+ *    then the most recently accredited, then the oldest registration.
+ */
+private function findBestAttendee(Event $event, string $email, string $phone): ?Attendee
+{
+    $proven = Attendee::where('eventId', $event->eventId)
+        ->whereRaw('LOWER(email) = ?', [$email])
+        ->get()
+        ->filter(fn (Attendee $a) => $this->phonesMatch((string) $a->phoneNumber, $phone));
+
+    if ($proven->isEmpty()) {
+        return null;
+    }
+
+    $last10 = substr(preg_replace('/\D+/', '', $phone), -10);
+
+    $related = Attendee::where('eventId', $event->eventId)
+        ->where(function ($q) use ($email, $last10) {
+            $q->whereRaw('LOWER(email) = ?', [$email]);
+
+            if (strlen($last10) >= 7) {
+                $q->orWhereRaw(
+                    "REPLACE(REPLACE(REPLACE(REPLACE(phoneNumber, ' ', ''), '-', ''), '+', ''), '(', '') LIKE ?",
+                    ['%' . $last10]
+                );
+            }
+        })
+        ->get();
+
+    return $related
+        ->sortBy([
+            fn ($a, $b) => (int) $this->isAccreditedRecord($b) <=> (int) $this->isAccreditedRecord($a),
+            fn ($a, $b) => (int) $b->certificateEligible <=> (int) $a->certificateEligible,
+            fn ($a, $b) => ($b->accreditedAt?->timestamp ?? 0) <=> ($a->accreditedAt?->timestamp ?? 0),
+            fn ($a, $b) => $a->attendeeId <=> $b->attendeeId,
+        ])
+        ->first();
+}
+
+private function isAccreditedRecord(Attendee $a): bool
+{
+    return (bool) ($a->isAccredited || $a->manualOverride);
+}
 }
