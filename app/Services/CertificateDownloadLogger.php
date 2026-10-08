@@ -3,32 +3,46 @@
 namespace App\Services;
 
 use App\Models\Attendee;
-use App\Models\Certificate;
 use App\Models\CertificateDownload;
+use App\Models\Event;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class CertificateDownloadLogger
 {
     /**
-     * Record one download. Never throws: a logging problem must not stop
-     * someone from getting their certificate.
+     * Record one certificate download.
      *
-     * @param string $source 'public' (email + phone page) or 'participant' (logged in)
+     * Logging must never prevent the certificate from being downloaded.
      */
-    public function log(Certificate $certificate, Attendee $attendee, string $source, ?Request $request = null): void
-    {
+    public function log(
+        Attendee $attendee,
+        Event $event,
+        string $type,
+        string $source = 'public',
+        ?Request $request = null
+    ): void {
         try {
             CertificateDownload::create([
-                'certificateId' => $certificate->certificateId,
-                'attendeeId'    => $attendee->attendeeId,
-                'eventId'       => $certificate->eventId ?? $attendee->eventId,
-                'type'          => $certificate->type,
-                'source'        => $source,
-                'ipAddress'     => $request?->ip(),
-                'userAgent'     => $request ? Str::limit((string) $request->userAgent(), 250, '') : null,
+                'attendeeId' => $attendee->attendeeId,
+                'eventId'    => $event->eventId,
+                'type'       => $type,
+                'source'     => $source,
+
+                'ipAddress' => $request?->ip(),
+
+                'userAgent' => $request
+                    ? Str::limit(
+                        (string) $request->userAgent(),
+                        1000,
+                        ''
+                    )
+                    : null,
             ]);
         } catch (\Throwable $e) {
+            /*
+             * A tracking failure must NEVER prevent certificate delivery.
+             */
             report($e);
         }
     }

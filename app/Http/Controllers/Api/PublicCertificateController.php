@@ -37,6 +37,8 @@ class PublicCertificateController extends Controller
         protected CertificateService $certificates,
         protected PresenterService $presenters,
         protected EligibilityService $eligibility,
+        protected CertificateDownloadLogger $downloadLogger,
+
     ) {}
 
     // ── Step 1: verify ───────────────────────────────────────────────────
@@ -165,39 +167,120 @@ class PublicCertificateController extends Controller
         ]);
     }
 
+    // public function download(Request $request, string $type)
+    // {
+    //     if (!in_array($type, CertificateService::typeKeys(), true)) {
+    //         return response()->json(['success' => false, 'message' => 'Unknown certificate type.'], 404);
+    //     }
+
+    //     [$event, $attendee] = $this->resolve($request);
+
+    //     if (!$attendee) {
+    //         return $this->sessionExpired();
+    //     }
+
+    //     if (!$this->eligibility->recalculate($attendee)) {
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Please complete the feedback questionnaire first. Your certificates unlock right after.',
+    //         ], 403);
+    //     }
+
+    //     if ($type !== 'attendance'
+    //         && !in_array($type, $this->presenters->presentationTypesForEmail((string) $attendee->email), true)) {
+    //         return response()->json(['success' => false, 'message' => 'You are not listed as a presenter for this certificate.'], 403);
+    //     }
+
+    //     $certificate = $this->certificates->issue($attendee, $event, $type);
+    //     $pdf         = $this->certificates->generate($attendee, $certificate, $event);
+
+    //     $id = $attendee->uniqueId ?: $attendee->attendeeId;
+
+    //     return response($pdf, 200)
+    //         ->header('Content-Type', 'application/pdf')
+    //         ->header('Content-Disposition', 'attachment; filename="' . $id . '-' . $type . '-certificate.pdf"');
+    // }
+
     public function download(Request $request, string $type)
-    {
-        if (!in_array($type, CertificateService::typeKeys(), true)) {
-            return response()->json(['success' => false, 'message' => 'Unknown certificate type.'], 404);
-        }
-
-        [$event, $attendee] = $this->resolve($request);
-
-        if (!$attendee) {
-            return $this->sessionExpired();
-        }
-
-        if (!$this->eligibility->recalculate($attendee)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please complete the feedback questionnaire first. Your certificates unlock right after.',
-            ], 403);
-        }
-
-        if ($type !== 'attendance'
-            && !in_array($type, $this->presenters->presentationTypesForEmail((string) $attendee->email), true)) {
-            return response()->json(['success' => false, 'message' => 'You are not listed as a presenter for this certificate.'], 403);
-        }
-
-        $certificate = $this->certificates->issue($attendee, $event, $type);
-        $pdf         = $this->certificates->generate($attendee, $certificate, $event);
-
-        $id = $attendee->uniqueId ?: $attendee->attendeeId;
-
-        return response($pdf, 200)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $id . '-' . $type . '-certificate.pdf"');
+{
+    if (!in_array($type, CertificateService::typeKeys(), true)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unknown certificate type.',
+        ], 404);
     }
+
+    [$event, $attendee] = $this->resolve($request);
+
+    if (!$attendee) {
+        return $this->sessionExpired();
+    }
+
+    if (!$this->eligibility->recalculate($attendee)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Please complete the feedback questionnaire first. Your certificates unlock right after.',
+        ], 403);
+    }
+
+    if (
+        $type !== CertificateService::TYPE_ATTENDANCE
+        && !in_array(
+            $type,
+            $this->presenters->presentationTypesForEmail(
+                (string) $attendee->email
+            ),
+            true
+        )
+    ) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You are not listed as a presenter for this certificate.',
+        ], 403);
+    }
+
+    /*
+     * Generate the certificate.
+     */
+    $certificate = $this->certificates->issue(
+        $attendee,
+        $event,
+        $type
+    );
+
+    $pdf = $this->certificates->generate(
+        $attendee,
+        $certificate,
+        $event
+    );
+
+    /*
+     * Record successful download.
+     *
+     * This happens AFTER PDF generation, so we don't count
+     * failed certificate generations as downloads.
+     */
+    $this->downloadLogger->log(
+        $attendee,
+        $event,
+        $type,
+        'public',
+        $request
+    );
+
+    $id = $attendee->uniqueId ?: $attendee->attendeeId;
+
+    return response($pdf, 200)
+        ->header('Content-Type', 'application/pdf')
+        ->header(
+            'Content-Disposition',
+            'attachment; filename="' .
+            $id .
+            '-' .
+            $type .
+            '-certificate.pdf"'
+        );
+}
 
     // ── helpers ──────────────────────────────────────────────────────────
 

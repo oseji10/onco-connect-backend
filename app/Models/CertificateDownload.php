@@ -4,13 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * One row per time a participant downloads a certificate PDF.
- */
 class CertificateDownload extends Model
 {
+    protected $table = 'certificate_downloads';
+
     protected $fillable = [
-        'certificateId',
         'attendeeId',
         'eventId',
         'type',
@@ -18,4 +16,22 @@ class CertificateDownload extends Model
         'ipAddress',
         'userAgent',
     ];
+
+    public function attendee()
+    {
+        return $this->belongsTo(
+            Attendee::class,
+            'attendeeId',
+            'attendeeId'
+        );
+    }
+
+    public function event()
+    {
+        return $this->belongsTo(
+            Event::class,
+            'eventId',
+            'eventId'
+        );
+    }
 }
