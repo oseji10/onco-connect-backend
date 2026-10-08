@@ -69,6 +69,7 @@ use App\Http\Controllers\Api\QuestionnaireInvitationController;
 use App\Http\Controllers\Api\AttendeeMessageController;
 use App\Http\Controllers\Api\PassPrintController;
 use App\Http\Controllers\Api\VipController;
+use App\Http\Controllers\Api\PublicCertificateController;
 
 
 
@@ -86,6 +87,18 @@ Route::post('/author/activate/{user}', [AuthorActivationController::class, 'stor
     // ->middleware('signed');
 
 
+
+Route::prefix('public/certificates')->group(function () {
+    Route::post('/verify', [PublicCertificateController::class, 'verify'])->middleware('throttle:10,1');
+ 
+    Route::get('/questionnaire', [PublicCertificateController::class, 'questionnaire'])->middleware('throttle:60,1');
+    Route::post('/questionnaire', [PublicCertificateController::class, 'submitQuestionnaire'])->middleware('throttle:30,1');
+ 
+    Route::get('/', [PublicCertificateController::class, 'index'])->middleware('throttle:60,1');
+ 
+    // keep this LAST so it doesn't swallow "questionnaire"
+    Route::get('/{type}', [PublicCertificateController::class, 'download'])->middleware('throttle:30,1');
+});
 
 
 /*
