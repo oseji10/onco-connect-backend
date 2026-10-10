@@ -52,8 +52,9 @@ class CertificateService
         return trim(implode(' ', array_filter([
             $attendee->title,
             $attendee->firstName,
-            $attendee->lastName,
             $attendee->otherNames,
+            $attendee->lastName,
+            
         ], function ($value) {
             return $value !== null && trim((string) $value) !== '';
         })));
